@@ -192,6 +192,16 @@ export default function RegisterPage() {
     setIsSendingOtp(true);
 
     try {
+      // Clear previous verifier instance to avoid stale reCAPTCHA tokens on resend
+      if (recaptchaVerifierRef.current) {
+        try {
+          recaptchaVerifierRef.current.clear();
+        } catch {
+          // ignore
+        }
+        recaptchaVerifierRef.current = null;
+      }
+
       const appVerifier = getOrCreateRecaptchaVerifier();
       if (!appVerifier) {
         throw new Error("Unable to initialize reCAPTCHA verifier.");
