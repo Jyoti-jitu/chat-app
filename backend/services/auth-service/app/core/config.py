@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     MONGODB_URL: str = "mongodb://localhost:27017"
     MONGODB_DATABASE: str = "fluxchat_db"
 
+    # JWT Authentication Configuration (Phase 3)
+    JWT_SECRET: str = "fluxchat-dev-secret-key-32-chars-minimum-replace-in-production"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+
     CORS_ORIGINS: Union[List[str], str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",

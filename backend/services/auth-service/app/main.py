@@ -94,6 +94,11 @@ async def health() -> HealthResponse:
     )
 
 
-# Mount versioned API routes
-app.include_router(api_router, prefix=settings.API_V1_STR, tags=["V1"])
+from app.api.v1.auth import router as auth_router
+
+# Mount versioned API routes (/api/v1/...)
+app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# Also mount /auth directly as requested in Phase 3 specifications
+app.include_router(auth_router, prefix="/auth")
 
