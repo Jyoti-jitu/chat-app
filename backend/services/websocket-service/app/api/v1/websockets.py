@@ -99,23 +99,36 @@ async def websocket_endpoint(
     user_id = str(payload.get("sub"))
     first_connection = await connection_manager.connect(user_id, websocket)
 
-    # 3. Update database presence if transitioning from offline -> online
-    if first_connection and await db_manager.is_connected():
+    # 3. Redis Presence Counter & Database Status Update (Phase 15)
+    try:
+        from shared.redis.client import redis_manager
+        presence_count = await redis_manager.incr(f"presence:count:{user_id}")
+        await redis_manager.set(f"presence:{user_id}", "online")
+    except Exception as redis_err:
+        logger.warning(f"Failed to increment Redis presence counter: {redis_err}")
+        presence_count = 1
+
+    if (first_connection or presence_count == 1) and await db_manager.is_connected():
         try:
             db = db_manager.get_database()
             await db.users.update_one(
                 {"_id": ObjectId(user_id)},
                 {"$set": {"is_online": True}},
             )
-            # Broadcast user.online to all connected clients
             online_event = {
                 "event": "user.online",
                 "data": {"user_id": user_id},
+                "exclude_user_id": user_id,
                 "timestamp": int(time.time()),
             }
             await connection_manager.broadcast_to_all(
                 online_event, exclude_user_id=user_id
             )
+            try:
+                from shared.redis.client import redis_manager
+                await redis_manager.publish("fluxchat:events", online_event)
+            except Exception:
+                pass
         except Exception as e:
             logger.warning(f"Failed to record online status in DB: {e}")
 
@@ -152,10 +165,23 @@ async def websocket_endpoint(
                     }
                 )
 
-            # Ephemeral typing indicators
+            # Ephemeral typing indicators with Redis TTL key (Phase 16)
             elif event_name in ("typing.start", "typing.stop"):
                 conversation_id = data.get("conversation_id")
                 recipient_ids = data.get("recipient_ids")
+
+                try:
+                    from shared.redis.client import redis_manager
+                    if event_name == "typing.start":
+                        await redis_manager.set(
+                            f"typing:{conversation_id}:{user_id}", "1", ex=4
+                        )
+                    else:
+                        await redis_manager.delete(
+                            f"typing:{conversation_id}:{user_id}"
+                        )
+                except Exception as redis_e:
+                    logger.debug(f"Redis typing TTL error: {redis_e}")
 
                 typing_payload = {
                     "event": event_name,
@@ -184,11 +210,52 @@ async def websocket_endpoint(
                     except Exception as e:
                         logger.warning(f"Error querying conversation members: {e}")
 
-            # Message read receipt relay
+            # Message delivery receipt (Phase 17)
+            elif event_name == "message.delivered":
+                conversation_id = data.get("conversation_id")
+                message_id = data.get("message_id")
+                recipient_ids = data.get("recipient_ids")
+
+                if message_id and ObjectId.is_valid(message_id) and await db_manager.is_connected():
+                    try:
+                        db = db_manager.get_database()
+                        await db.messages.update_one(
+                            {"_id": ObjectId(message_id), "status": "sent"},
+                            {"$set": {"status": "delivered"}},
+                        )
+                    except Exception as err:
+                        logger.warning(f"Failed to update delivered status: {err}")
+
+                delivered_payload = {
+                    "event": "message.delivered",
+                    "data": {
+                        "conversation_id": conversation_id,
+                        "message_id": message_id,
+                        "recipient_id": user_id,
+                    },
+                    "timestamp": int(time.time()),
+                }
+
+                if recipient_ids and isinstance(recipient_ids, list):
+                    await connection_manager.broadcast_to_users(
+                        delivered_payload, recipient_ids, exclude_user_id=user_id
+                    )
+
+            # Message read receipt relay & DB persistence (Phase 17)
             elif event_name == "message.read":
                 conversation_id = data.get("conversation_id")
                 message_id = data.get("message_id")
                 recipient_ids = data.get("recipient_ids")
+
+                if message_id and ObjectId.is_valid(message_id) and await db_manager.is_connected():
+                    try:
+                        db = db_manager.get_database()
+                        await db.messages.update_one(
+                            {"_id": ObjectId(message_id)},
+                            {"$set": {"status": "read"}},
+                        )
+                    except Exception as err:
+                        logger.warning(f"Failed to update read status: {err}")
 
                 read_payload = {
                     "event": "message.read",
@@ -210,9 +277,18 @@ async def websocket_endpoint(
     except Exception as exc:
         logger.warning(f"WebSocket connection error for user [{user_id}]: {exc}")
     finally:
-        # 6. Disconnect socket and evaluate offline status
+        # 6. Disconnect socket and evaluate offline status with Redis counter (Phase 15)
         last_connection = await connection_manager.disconnect(user_id, websocket)
-        if last_connection and await db_manager.is_connected():
+        try:
+            from shared.redis.client import redis_manager
+            remaining = await redis_manager.decr(f"presence:count:{user_id}")
+            if remaining <= 0:
+                await redis_manager.delete(f"presence:{user_id}")
+                await redis_manager.delete(f"presence:count:{user_id}")
+        except Exception as redis_err:
+            remaining = 0 if last_connection else 1
+
+        if (last_connection or remaining <= 0) and await db_manager.is_connected():
             try:
                 db = db_manager.get_database()
                 now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -223,13 +299,20 @@ async def websocket_endpoint(
                 offline_event = {
                     "event": "user.offline",
                     "data": {"user_id": user_id, "last_seen": now_str},
+                    "exclude_user_id": user_id,
                     "timestamp": int(time.time()),
                 }
                 await connection_manager.broadcast_to_all(
                     offline_event, exclude_user_id=user_id
                 )
+                try:
+                    from shared.redis.client import redis_manager
+                    await redis_manager.publish("fluxchat:events", offline_event)
+                except Exception:
+                    pass
             except Exception as e:
                 logger.warning(f"Failed to record offline status in DB: {e}")
+
 
 
 # ==============================================================================
