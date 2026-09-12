@@ -88,6 +88,8 @@ class TwoFactorService:
             # Call live 2Factor.in API: SMS or VOICE route
             endpoint = "VOICE" if delivery_channel == "voice" else "SMS"
             url = f"{settings.TWO_FACTOR_BASE_URL}/{api_key}/{endpoint}/{clean_phone}/AUTOGEN"
+            if delivery_channel == "sms" and getattr(settings, "TWO_FACTOR_OTP_TEMPLATE", "").strip():
+                url = f"{url}/{settings.TWO_FACTOR_OTP_TEMPLATE.strip()}"
             try:
                 async with httpx.AsyncClient(timeout=12.0) as client:
                     response = await client.get(url)

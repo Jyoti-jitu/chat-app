@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     # 2Factor SMS OTP Configuration
     TWO_FACTOR_API_KEY: str = ""
     TWO_FACTOR_BASE_URL: str = "https://2factor.in/API/V1"
+    TWO_FACTOR_OTP_TEMPLATE: str = ""
     OTP_EXPIRE_MINUTES: int = 10
     OTP_RESEND_COOLDOWN_SECONDS: int = 30
     OTP_MAX_ATTEMPTS: int = 5
