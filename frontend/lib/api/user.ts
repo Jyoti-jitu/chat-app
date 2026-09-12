@@ -44,11 +44,13 @@ export interface UpdateProfilePayload {
   phone?: string;
 }
 
+import { getStoredToken } from "./auth";
+
 /**
  * Retrieves authenticated user's private profile from User Service.
  */
 export async function getMyProfile(token?: string): Promise<UserProfile> {
-  const authToken = token || (typeof window !== "undefined" ? localStorage.getItem("accessToken") : null);
+  const authToken = token || getStoredToken();
 
   const res = await fetch(`${USER_SERVICE_URL}/users/me`, {
     method: "GET",
@@ -73,7 +75,7 @@ export async function updateMyProfile(
   payload: UpdateProfilePayload,
   token?: string
 ): Promise<UserProfile> {
-  const authToken = token || (typeof window !== "undefined" ? localStorage.getItem("accessToken") : null);
+  const authToken = token || getStoredToken();
 
   const res = await fetch(`${USER_SERVICE_URL}/users/me`, {
     method: "PATCH",
@@ -100,7 +102,7 @@ export async function searchUsers(
   limit: number = 20,
   token?: string
 ): Promise<UserSearchResponse> {
-  const authToken = token || (typeof window !== "undefined" ? localStorage.getItem("accessToken") : null);
+  const authToken = token || getStoredToken();
 
   const res = await fetch(
     `${USER_SERVICE_URL}/users/search?q=${encodeURIComponent(query)}&limit=${limit}`,
@@ -128,7 +130,7 @@ export async function getUserPublicProfile(
   userId: string,
   token?: string
 ): Promise<UserPublicProfile> {
-  const authToken = token || (typeof window !== "undefined" ? localStorage.getItem("accessToken") : null);
+  const authToken = token || getStoredToken();
 
   const res = await fetch(`${USER_SERVICE_URL}/users/${userId}`, {
     method: "GET",

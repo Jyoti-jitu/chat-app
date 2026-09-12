@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -14,11 +14,25 @@ import {
   CircleDot,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
-import { currentUser } from "@/lib/mock/users";
 import { cn } from "@/lib/utils/cn";
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const [profile, setProfile] = useState<{ name: string; username: string; avatar?: string } | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("fluxchat_user");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.name) {
+            setProfile(parsed);
+          }
+        } catch {}
+      }
+    }
+  }, []);
 
   const navItems = [
     {
@@ -129,7 +143,7 @@ export function AppSidebar() {
         })}
       </nav>
 
-      {/* User Profile at Bottom (matching reference) */}
+      {/* User Profile at Bottom */}
       <div className="p-3 border-t border-[#E6EBE8] dark:border-[#212E29]">
         <div className="flex items-center justify-between p-2 rounded-xl hover:bg-[#F7F9F8] dark:hover:bg-[#1D2723] transition-colors">
           <Link
@@ -137,21 +151,28 @@ export function AppSidebar() {
             className="flex items-center gap-3 min-w-0 flex-1"
           >
             <Avatar
-              name={currentUser.name}
+              name={profile?.name || "My Account"}
               size="md"
-              isOnline={currentUser.isOnline}
+              isOnline={true}
             />
             <div className="min-w-0 text-left">
               <div className="text-xs font-bold text-[#17211D] dark:text-[#F1F5F3] truncate">
-                {currentUser.name}
+                {profile?.name || "My Account"}
               </div>
               <div className="text-[11px] text-[#66736D] dark:text-[#8E9C95] truncate">
-                @{currentUser.username}
+                {profile?.username ? `@${profile.username}` : "Online"}
               </div>
             </div>
           </Link>
           <Link
             href="/login"
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                localStorage.removeItem("fluxchat_access_token");
+                localStorage.removeItem("accessToken");
+                localStorage.removeItem("fluxchat_user");
+              }
+            }}
             title="Sign out"
             className="p-1.5 text-[#66736D] dark:text-[#8E9C95] hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
           >

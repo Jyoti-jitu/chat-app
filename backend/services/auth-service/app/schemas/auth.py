@@ -4,7 +4,7 @@ Decouples client-facing data contracts from internal database documents.
 """
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 
 class UserRegisterRequest(BaseModel):
@@ -19,6 +19,7 @@ class UserRegisterRequest(BaseModel):
     )
     email: EmailStr = Field(..., description="Valid unique email address")
     password: str = Field(..., min_length=6, max_length=128, description="Account password (min 6 characters)")
+    confirm_password: Optional[str] = Field(None, description="Password confirmation")
     phone: Optional[str] = Field(None, description="Verified mobile number (e.g. +919876543210)")
     verification_token: Optional[str] = Field(None, description="Cryptographic token proving mobile ownership")
 
@@ -31,6 +32,12 @@ class UserRegisterRequest(BaseModel):
     @classmethod
     def normalize_email(cls, v: str) -> str:
         return v.strip().lower()
+
+    @model_validator(mode="after")
+    def verify_passwords_match(self) -> "UserRegisterRequest":
+        if self.confirm_password is not None and self.password != self.confirm_password:
+            raise ValueError("Passwords do not match. Password and confirm password must be identical.")
+        return self
 
 
 class SendOtpRequest(BaseModel):

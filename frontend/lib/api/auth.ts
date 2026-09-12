@@ -76,17 +76,26 @@ export interface AuthUserResponse {
  */
 export function getStoredToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("fluxchat_access_token");
+  return (
+    localStorage.getItem("fluxchat_access_token") ||
+    localStorage.getItem("accessToken")
+  );
 }
 
-export function setStoredToken(token: string): void {
+export function setStoredToken(token: string, user?: any): void {
   if (typeof window === "undefined") return;
   localStorage.setItem("fluxchat_access_token", token);
+  localStorage.setItem("accessToken", token);
+  if (user) {
+    localStorage.setItem("fluxchat_user", JSON.stringify(user));
+  }
 }
 
 export function removeStoredToken(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem("fluxchat_access_token");
+  localStorage.removeItem("accessToken");
+  localStorage.removeItem("fluxchat_user");
 }
 
 /**
@@ -142,7 +151,7 @@ export async function login(payload: LoginPayload): Promise<AuthTokensResponse> 
     throw new Error(data.detail || "Invalid credentials");
   }
   if (data.access_token) {
-    setStoredToken(data.access_token);
+    setStoredToken(data.access_token, data.user);
   }
   return data;
 }
@@ -162,7 +171,7 @@ export async function loginWithOtp(payload: LoginOtpPayload): Promise<AuthTokens
     throw new Error(data.detail || "OTP login failed");
   }
   if (data.access_token) {
-    setStoredToken(data.access_token);
+    setStoredToken(data.access_token, data.user);
   }
   return data;
 }
@@ -182,7 +191,7 @@ export async function register(payload: RegisterPayload): Promise<AuthTokensResp
     throw new Error(data.detail || "Registration failed");
   }
   if (data.access_token) {
-    setStoredToken(data.access_token);
+    setStoredToken(data.access_token, data.user);
   }
   return data;
 }

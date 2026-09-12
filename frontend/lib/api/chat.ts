@@ -58,11 +58,10 @@ export interface UpdateGroupConversationPayload {
 }
 
 import { ActionSuccessResponse } from "./contact";
+import { getStoredToken } from "./auth";
 
 function getAuthHeader(token?: string): Record<string, string> {
-  const authToken =
-    token ||
-    (typeof window !== "undefined" ? localStorage.getItem("accessToken") : null);
+  const authToken = token || getStoredToken();
   return authToken ? { Authorization: `Bearer ${authToken}` } : {};
 }
 

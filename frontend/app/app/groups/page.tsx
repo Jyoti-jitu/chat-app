@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Users,
@@ -23,17 +23,51 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Avatar } from "@/components/ui/Avatar";
-import { mockGroups } from "@/lib/mock/groups";
-import { mockUsers } from "@/lib/mock/users";
 import { Group } from "@/types/group";
 import { cn } from "@/lib/utils/cn";
+import { getStoredToken } from "@/lib/api/auth";
+import { getContacts } from "@/lib/api/contact";
 
 export default function GroupsPage() {
   const router = useRouter();
-  const [groups, setGroups] = useState<Group[]>(mockGroups);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [contacts, setContacts] = useState<{ id: string; name: string; username: string; avatar?: string; isOnline?: boolean }[]>([]);
   const [activeTab, setActiveTab] = useState<"all" | "joined" | "discover" | "my">("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+
+  const [currentUserName, setCurrentUserName] = useState("You");
+  const [currentUserId, setCurrentUserId] = useState("u_me");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const userStr = localStorage.getItem("fluxchat_user");
+      if (userStr) {
+        try {
+          const u = JSON.parse(userStr);
+          if (u.name) setCurrentUserName(u.name);
+          if (u.id) setCurrentUserId(u.id);
+        } catch {}
+      }
+    }
+
+    const token = getStoredToken();
+    if (token) {
+      getContacts(token).then((res) => {
+        if (res.items) {
+          setContacts(
+            res.items.map((i) => ({
+              id: i.contact_id,
+              name: i.user.name,
+              username: i.user.username,
+              avatar: i.user.avatar || undefined,
+              isOnline: i.user.is_online,
+            }))
+          );
+        }
+      }).catch(() => {});
+    }
+  }, []);
 
   // Create Group Modal
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -42,7 +76,7 @@ export default function GroupsPage() {
   const [groupCategory, setGroupCategory] = useState<"work" | "social" | "family" | "tech" | "general">("work");
   const [isPrivate, setIsPrivate] = useState(true);
   const [selectedEmoji, setSelectedEmoji] = useState("🚀");
-  const [selectedMembers, setSelectedMembers] = useState<string[]>(["u_sarah", "u_alex"]);
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
 
   // Group Info Modal
   const [selectedGroupInfo, setSelectedGroupInfo] = useState<Group | null>(null);
@@ -75,7 +109,7 @@ export default function GroupsPage() {
     // Tab filter
     if (activeTab === "joined" && !g.isJoined) return false;
     if (activeTab === "discover" && (g.isJoined || g.isPrivate)) return false;
-    if (activeTab === "my" && g.createdBy !== "John Doe") return false;
+    if (activeTab === "my" && g.createdBy !== currentUserName && g.createdBy !== "You") return false;
 
     // Category filter
     if (selectedCategory !== "all" && g.category !== selectedCategory) return false;
@@ -129,16 +163,16 @@ export default function GroupsPage() {
       avatarEmoji: selectedEmoji,
       avatarColor: "var(--primary)",
       isPrivate: isPrivate,
-      createdBy: "John Doe",
+      createdBy: currentUserName,
       isJoined: true,
       memberCount: selectedMembers.length + 1,
       onlineCount: Math.ceil((selectedMembers.length + 1) / 2),
       lastActivity: "Just now",
       lastMessage: "Group created! Start chatting with your members.",
       members: [
-        { id: "u_me", name: "John Doe", role: "admin", isOnline: true },
+        { id: currentUserId, name: currentUserName, role: "admin", isOnline: true },
         ...selectedMembers.map((id) => {
-          const contact = mockUsers.find((c) => c.id === id);
+          const contact = contacts.find((c) => c.id === id);
           return {
             id,
             name: contact?.name || "Member",
@@ -202,7 +236,7 @@ export default function GroupsPage() {
                 { id: "all", label: "All Groups", count: groups.length },
                 { id: "joined", label: "Joined", count: groups.filter((g) => g.isJoined).length },
                 { id: "discover", label: "Public Discover", count: groups.filter((g) => !g.isJoined && !g.isPrivate).length },
-                { id: "my", label: "Created by Me", count: groups.filter((g) => g.createdBy === "John Doe").length },
+                { id: "my", label: "Created by Me", count: groups.filter((g) => g.createdBy === currentUserName || g.createdBy === "You").length },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -346,7 +380,7 @@ export default function GroupsPage() {
                     >
                       <Info className="w-4 h-4" />
                     </button>
-                    {group.createdBy === "John Doe" && (
+                    {(group.createdBy === currentUserName || group.createdBy === "You") && (
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold">
                           Admin
@@ -538,39 +572,45 @@ export default function GroupsPage() {
               Add Members ({selectedMembers.length} selected)
             </label>
             <div className="max-h-40 overflow-y-auto divide-y divide-[#E6EBE8] dark:divide-[#212E29] border border-[#E6EBE8] dark:border-[#212E29] rounded-xl p-1 bg-[#F7F9F8]/50 dark:bg-[#151D1A]/50">
-              {mockUsers.map((contact) => {
-                const isSelected = selectedMembers.includes(contact.id);
-                return (
-                  <button
-                    key={contact.id}
-                    type="button"
-                    onClick={() => handleToggleMemberSelect(contact.id)}
-                    className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-white dark:hover:bg-[#1D2723] transition-colors text-left cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Avatar name={contact.name} size="sm" isOnline={contact.isOnline} />
-                      <div>
-                        <div className="text-xs font-semibold text-[#17211D] dark:text-[#F1F5F3]">
-                          {contact.name}
-                        </div>
-                        <div className="text-[10px] text-[#66736D] dark:text-[#8E9C95]">
-                          @{contact.username}
+              {contacts.length > 0 ? (
+                contacts.map((contact) => {
+                  const isSelected = selectedMembers.includes(contact.id);
+                  return (
+                    <button
+                      key={contact.id}
+                      type="button"
+                      onClick={() => handleToggleMemberSelect(contact.id)}
+                      className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-white dark:hover:bg-[#1D2723] transition-colors text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Avatar name={contact.name} size="sm" isOnline={contact.isOnline} />
+                        <div>
+                          <div className="text-xs font-semibold text-[#17211D] dark:text-[#F1F5F3]">
+                            {contact.name}
+                          </div>
+                          <div className="text-[10px] text-[#66736D] dark:text-[#8E9C95]">
+                            @{contact.username}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div
-                      className={cn(
-                        "w-5 h-5 rounded-md border flex items-center justify-center transition-colors",
-                        isSelected
-                          ? "bg-[var(--primary)] border-[var(--primary)] text-white"
-                          : "border-[#E6EBE8] dark:border-[#212E29] bg-white dark:bg-[#151D1A]"
-                      )}
-                    >
-                      {isSelected && <Check className="w-3 h-3" />}
-                    </div>
-                  </button>
-                );
-              })}
+                      <div
+                        className={cn(
+                          "w-5 h-5 rounded-md border flex items-center justify-center transition-colors",
+                          isSelected
+                            ? "bg-[var(--primary)] border-[var(--primary)] text-white"
+                            : "border-[#E6EBE8] dark:border-[#212E29] bg-white dark:bg-[#151D1A]"
+                        )}
+                      >
+                        {isSelected && <Check className="w-3 h-3" />}
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="p-4 text-center text-xs text-[#66736D] dark:text-[#8E9C95]">
+                  No contacts found. Add contacts first to invite them to this group.
+                </div>
+              )}
             </div>
           </div>
 

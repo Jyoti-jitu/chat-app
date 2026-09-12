@@ -19,8 +19,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
-import { mockUsers } from "@/lib/mock/users";
 import { User } from "@/types/user";
+import { getStoredToken } from "@/lib/api/auth";
 import {
   getContacts,
   deleteContact,
@@ -28,13 +28,13 @@ import {
 } from "@/lib/api/contact";
 
 export default function ContactsPage() {
-  const [contacts, setContacts] = useState<User[]>(mockUsers);
+  const [contacts, setContacts] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [contactToDelete, setContactToDelete] = useState<User | null>(null);
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState<"success" | "error">("success");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -49,9 +49,12 @@ export default function ContactsPage() {
   };
 
   const fetchRoster = useCallback(async () => {
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
-    if (!token) return;
+    const token = getStoredToken();
+    if (!token) {
+      setContacts([]);
+      setIsLoading(false);
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -71,12 +74,11 @@ export default function ContactsPage() {
         }));
         setContacts(mapped);
       } else {
-        // If live user has 0 contacts, show empty roster rather than mock users
         setContacts([]);
       }
     } catch (err: any) {
       console.warn("Could not load live contacts from user-service:", err.message);
-      // Keep mockUsers as graceful fallback
+      setContacts([]);
     } finally {
       setIsLoading(false);
     }
@@ -228,129 +230,153 @@ export default function ContactsPage() {
           />
         </div>
 
-        {/* Section: Online Contacts */}
-        <div className="space-y-3">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-[#66736D] dark:text-[#8E9C95]">
-            Online ({onlineContacts.length})
-          </h2>
-          <div className="space-y-2">
-            {onlineContacts.length > 0 ? (
-              onlineContacts.map((contact) => (
-                <div
-                  key={contact.id}
-                  className="flex items-center justify-between p-3.5 rounded-2xl bg-white dark:bg-[#151D1A] border border-[#E6EBE8] dark:border-[#212E29] hover:border-[#CFD6D2] dark:hover:border-[#2F3F38] shadow-xs transition-all group"
-                >
-                  <div className="flex items-center gap-3.5 min-w-0">
-                    <Avatar
-                      name={contact.name}
-                      src={contact.avatar}
-                      size="md"
-                      isOnline={contact.isOnline}
-                    />
-                    <div className="min-w-0 text-left">
-                      <h3 className="text-sm font-bold text-[#17211D] dark:text-[#F1F5F3] truncate">
-                        {contact.name}
-                      </h3>
-                      <p className="text-xs text-[#66736D] dark:text-[#8E9C95] truncate">
-                        @{contact.username}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => alert(`Calling ${contact.name}...`)}
-                      className="opacity-0 group-hover:opacity-100 p-2 text-[#66736D] hover:text-[#168F67] rounded-lg transition-all hidden sm:block cursor-pointer"
-                      title={`Call ${contact.name}`}
-                    >
-                      <Phone className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => alert(`Video calling ${contact.name}...`)}
-                      className="opacity-0 group-hover:opacity-100 p-2 text-[#66736D] hover:text-[#168F67] rounded-lg transition-all hidden sm:block cursor-pointer"
-                      title={`Video call ${contact.name}`}
-                    >
-                      <Video className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setContactToDelete(contact)}
-                      className="opacity-0 group-hover:opacity-100 p-2 text-[#66736D] hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-all cursor-pointer"
-                      title={`Delete ${contact.name}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                    <Link href={`/app/chats/c_${contact.id}`}>
-                      <Button variant="soft" size="sm" leftIcon={<MessageSquare className="w-3.5 h-3.5" />}>
-                        Message
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="p-4 rounded-xl text-center text-xs text-[#66736D] dark:text-[#8E9C95] border border-dashed border-[#E6EBE8] dark:border-[#212E29]">
-                {isLoading ? "Loading contacts..." : "No online contacts right now."}
-              </div>
-            )}
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <Loader2 className="w-8 h-8 text-[var(--primary)] animate-spin mb-3" />
+            <p className="text-sm text-[#66736D] dark:text-[#8E9C95]">Loading your contacts...</p>
           </div>
-        </div>
-
-        {/* Section: Offline Contacts */}
-        <div className="space-y-3 pt-2">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-[#66736D] dark:text-[#8E9C95]">
-            Offline ({offlineContacts.length})
-          </h2>
-          <div className="space-y-2">
-            {offlineContacts.length > 0 ? (
-              offlineContacts.map((contact) => (
-                <div
-                  key={contact.id}
-                  className="flex items-center justify-between p-3.5 rounded-2xl bg-white dark:bg-[#151D1A] border border-[#E6EBE8] dark:border-[#212E29] hover:border-[#CFD6D2] dark:hover:border-[#2F3F38] shadow-xs transition-all group"
-                >
-                  <div className="flex items-center gap-3.5 min-w-0">
-                    <Avatar
-                      name={contact.name}
-                      src={contact.avatar}
-                      size="md"
-                      isOnline={contact.isOnline}
-                    />
-                    <div className="min-w-0 text-left">
-                      <h3 className="text-sm font-bold text-[#17211D] dark:text-[#F1F5F3] truncate">
-                        {contact.name}
-                      </h3>
-                      <p className="text-xs text-[#66736D] dark:text-[#8E9C95] truncate">
-                        @{contact.username} • {contact.lastSeen || "Offline"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setContactToDelete(contact)}
-                      className="opacity-0 group-hover:opacity-100 p-2 text-[#66736D] hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-all cursor-pointer"
-                      title={`Delete ${contact.name}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                    <Link href={`/app/chats/c_${contact.id}`}>
-                      <Button variant="secondary" size="sm">
-                        Message
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="p-4 rounded-xl text-center text-xs text-[#66736D] dark:text-[#8E9C95] border border-dashed border-[#E6EBE8] dark:border-[#212E29]">
-                {isLoading ? "Loading contacts..." : "No offline contacts."}
-              </div>
-            )}
+        ) : contacts.length === 0 && !searchQuery ? (
+          <div className="flex flex-col items-center justify-center py-16 px-4 text-center rounded-2xl border border-dashed border-[#E6EBE8] dark:border-[#212E29] bg-[#F7F9F8]/50 dark:bg-[#151D1A]/50">
+            <div className="w-14 h-14 rounded-2xl bg-[var(--primary-light)] text-[var(--primary)] flex items-center justify-center mb-4">
+              <UserPlus className="w-7 h-7" />
+            </div>
+            <h3 className="text-base font-bold text-[#17211D] dark:text-[#F1F5F3] mb-1">
+              No contacts yet
+            </h3>
+            <p className="text-sm text-[#66736D] dark:text-[#8E9C95] max-w-sm mb-6">
+              Connect with your friends, colleagues, or teammates using their username, email, or phone number.
+            </p>
+            <Button onClick={() => setIsAddModalOpen(true)} leftIcon={<Plus className="w-4 h-4" />}>
+              Add Contact
+            </Button>
           </div>
-        </div>
+        ) : (
+          <>
+            {/* Section: Online Contacts */}
+            <div className="space-y-3">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-[#66736D] dark:text-[#8E9C95]">
+                Online ({onlineContacts.length})
+              </h2>
+              <div className="space-y-2">
+                {onlineContacts.length > 0 ? (
+                  onlineContacts.map((contact) => (
+                    <div
+                      key={contact.id}
+                      className="flex items-center justify-between p-3.5 rounded-2xl bg-white dark:bg-[#151D1A] border border-[#E6EBE8] dark:border-[#212E29] hover:border-[#CFD6D2] dark:hover:border-[#2F3F38] shadow-xs transition-all group"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <Avatar
+                          name={contact.name}
+                          src={contact.avatar}
+                          size="md"
+                          isOnline={contact.isOnline}
+                        />
+                        <div className="min-w-0 text-left">
+                          <h3 className="text-sm font-bold text-[#17211D] dark:text-[#F1F5F3] truncate">
+                            {contact.name}
+                          </h3>
+                          <p className="text-xs text-[#66736D] dark:text-[#8E9C95] truncate">
+                            @{contact.username}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => alert(`Calling ${contact.name}...`)}
+                          className="opacity-0 group-hover:opacity-100 p-2 text-[#66736D] hover:text-[#168F67] rounded-lg transition-all hidden sm:block cursor-pointer"
+                          title={`Call ${contact.name}`}
+                        >
+                          <Phone className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => alert(`Video calling ${contact.name}...`)}
+                          className="opacity-0 group-hover:opacity-100 p-2 text-[#66736D] hover:text-[#168F67] rounded-lg transition-all hidden sm:block cursor-pointer"
+                          title={`Video call ${contact.name}`}
+                        >
+                          <Video className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setContactToDelete(contact)}
+                          className="opacity-0 group-hover:opacity-100 p-2 text-[#66736D] hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-all cursor-pointer"
+                          title={`Delete ${contact.name}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                        <Link href={`/app/chats/c_${contact.id}`}>
+                          <Button variant="soft" size="sm" leftIcon={<MessageSquare className="w-3.5 h-3.5" />}>
+                            Message
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-4 rounded-xl text-center text-xs text-[#66736D] dark:text-[#8E9C95] border border-dashed border-[#E6EBE8] dark:border-[#212E29]">
+                    No online contacts right now.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Section: Offline Contacts */}
+            <div className="space-y-3 pt-2">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-[#66736D] dark:text-[#8E9C95]">
+                Offline ({offlineContacts.length})
+              </h2>
+              <div className="space-y-2">
+                {offlineContacts.length > 0 ? (
+                  offlineContacts.map((contact) => (
+                    <div
+                      key={contact.id}
+                      className="flex items-center justify-between p-3.5 rounded-2xl bg-white dark:bg-[#151D1A] border border-[#E6EBE8] dark:border-[#212E29] hover:border-[#CFD6D2] dark:hover:border-[#2F3F38] shadow-xs transition-all group"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <Avatar
+                          name={contact.name}
+                          src={contact.avatar}
+                          size="md"
+                          isOnline={contact.isOnline}
+                        />
+                        <div className="min-w-0 text-left">
+                          <h3 className="text-sm font-bold text-[#17211D] dark:text-[#F1F5F3] truncate">
+                            {contact.name}
+                          </h3>
+                          <p className="text-xs text-[#66736D] dark:text-[#8E9C95] truncate">
+                            @{contact.username} • {contact.lastSeen || "Offline"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setContactToDelete(contact)}
+                          className="opacity-0 group-hover:opacity-100 p-2 text-[#66736D] hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-all cursor-pointer"
+                          title={`Delete ${contact.name}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                        <Link href={`/app/chats/c_${contact.id}`}>
+                          <Button variant="secondary" size="sm">
+                            Message
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-4 rounded-xl text-center text-xs text-[#66736D] dark:text-[#8E9C95] border border-dashed border-[#E6EBE8] dark:border-[#212E29]">
+                    No offline contacts.
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Add Contact Modal */}

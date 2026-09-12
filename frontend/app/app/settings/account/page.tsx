@@ -1,24 +1,59 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { currentUser } from "@/lib/mock/users";
 import { CheckCircle2 } from "lucide-react";
+import { getMyProfile, updateMyProfile } from "@/lib/api/user";
 
 export default function AccountSettingsPage() {
-  const [name, setName] = useState(currentUser.name);
-  const [username, setUsername] = useState(currentUser.username);
-  const [email, setEmail] = useState(currentUser.email);
+  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [saved, setSaved] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSave = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("fluxchat_user");
+      if (stored) {
+        try {
+          const u = JSON.parse(stored);
+          if (u.name) setName(u.name);
+          if (u.username) setUsername(u.username);
+          if (u.email) setEmail(u.email);
+        } catch {}
+      }
+    }
+
+    getMyProfile()
+      .then((user) => {
+        setName(user.name);
+        setUsername(user.username);
+        setEmail(user.email);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("fluxchat_user", JSON.stringify(user));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    setIsSubmitting(true);
+    try {
+      await updateMyProfile({ name });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

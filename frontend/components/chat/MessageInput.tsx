@@ -32,16 +32,38 @@ export function MessageInput({
     inputRef.current?.focus();
   };
 
-  const handleMockAttachment = () => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAttachmentClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const formatBytes = (bytes: number) => {
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    };
     onSendAttachment?.({
-      name: "Project_Specs_2026.pdf",
-      size: "1.8 MB",
+      name: file.name,
+      size: formatBytes(file.size),
       type: "file",
     });
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   return (
     <div className="relative p-3 sm:p-4 bg-white dark:bg-[#151D1A] border-t border-[#E6EBE8] dark:border-[#212E29]">
+      {/* Hidden native file input for real attachments */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        className="hidden"
+      />
+
       {/* Emoji Picker Popover */}
       {showEmojiPicker && (
         <div className="absolute bottom-16 right-16 p-2 bg-white dark:bg-[#1A2622] rounded-2xl border border-[#E6EBE8] dark:border-[#212E29] shadow-flux-md flex items-center gap-1 z-30 animate-in fade-in zoom-in-95 duration-100">
@@ -62,7 +84,7 @@ export function MessageInput({
         {/* Attachment button (+) */}
         <button
           type="button"
-          onClick={handleMockAttachment}
+          onClick={handleAttachmentClick}
           title="Add attachment"
           className="p-2.5 rounded-full bg-[#F4F6F5] dark:bg-[#1D2723] text-[#66736D] dark:text-[#8E9C95] hover:text-[#168F67] dark:hover:text-[#22A06B] hover:bg-[#EAF5F0] dark:hover:bg-[#24332D] transition-colors cursor-pointer shrink-0"
         >

@@ -167,20 +167,25 @@ export default function LoginPage() {
       if (res.ok) {
         if (data.access_token) {
           localStorage.setItem("fluxchat_access_token", data.access_token);
+          localStorage.setItem("accessToken", data.access_token);
+        }
+        if (data.user) {
+          localStorage.setItem("fluxchat_user", JSON.stringify(data.user));
         }
         setSuccessNotice(true);
         setTimeout(() => {
           router.push("/app/chats");
         }, 500);
       } else {
-        setErrorNotice(data.detail || "Authentication failed. Please check your credentials.");
+        const errorMsg =
+          data.error?.message ||
+          (Array.isArray(data.detail) ? data.detail[0]?.message : data.detail) ||
+          "Authentication failed. Please check your credentials.";
+        setErrorNotice(errorMsg);
       }
-    } catch {
-      // Fallback for offline preview
-      setSuccessNotice(true);
-      setTimeout(() => {
-        router.push("/app/chats");
-      }, 500);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Network error. Please check your connection.";
+      setErrorNotice(msg);
     } finally {
       setIsLoading(false);
     }

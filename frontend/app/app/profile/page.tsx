@@ -17,12 +17,38 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
-import { currentUser as initialUser } from "@/lib/mock/users";
 import { User } from "@/types/user";
 import { getMyProfile, updateMyProfile } from "@/lib/api/user";
 
 export default function ProfilePage() {
-  const [user, setUser] = useState<User>(initialUser);
+  const [user, setUser] = useState<User>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("fluxchat_user");
+      if (stored) {
+        try {
+          const u = JSON.parse(stored);
+          return {
+            id: u.id || "",
+            name: u.name || "User",
+            username: u.username || "user",
+            email: u.email || "",
+            bio: u.bio || "",
+            avatar: u.avatar || undefined,
+            isOnline: true,
+          };
+        } catch {}
+      }
+    }
+    return {
+      id: "",
+      name: "User",
+      username: "user",
+      email: "",
+      bio: "",
+      isOnline: true,
+    };
+  });
+
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [name, setName] = useState(user.name);
   const [bio, setBio] = useState(user.bio || "");
@@ -37,22 +63,24 @@ export default function ProfilePage() {
       try {
         const liveUser = await getMyProfile();
         if (liveUser) {
-          setUser((prev) => ({
-            ...prev,
+          setUser({
             id: liveUser.id,
             name: liveUser.name,
             username: liveUser.username,
             email: liveUser.email,
             bio: liveUser.bio || "",
-            avatar: liveUser.avatar || prev.avatar,
+            avatar: liveUser.avatar || undefined,
             isOnline: liveUser.is_online,
-          }));
+          });
           setName(liveUser.name);
           setBio(liveUser.bio || "");
           setEmail(liveUser.email);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("fluxchat_user", JSON.stringify(liveUser));
+          }
         }
       } catch {
-        // Fallback to local user state when offline or unauthenticated preview
+        // Keeps stored authenticated user
       }
     }
     loadProfile();

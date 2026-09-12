@@ -14,8 +14,8 @@ import {
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Tabs } from "@/components/ui/Tabs";
-import { mockRequests } from "@/lib/mock/requests";
 import { ConnectionRequest } from "@/types/request";
+import { getStoredToken } from "@/lib/api/auth";
 import {
   getContactRequests,
   acceptContactRequest,
@@ -24,9 +24,9 @@ import {
 } from "@/lib/api/contact";
 
 export default function RequestsPage() {
-  const [requests, setRequests] = useState<ConnectionRequest[]>(mockRequests);
+  const [requests, setRequests] = useState<ConnectionRequest[]>([]);
   const [activeTab, setActiveTab] = useState("received");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState<"success" | "error">("success");
@@ -38,9 +38,12 @@ export default function RequestsPage() {
   };
 
   const fetchRequests = useCallback(async () => {
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
-    if (!token) return;
+    const token = getStoredToken();
+    if (!token) {
+      setRequests([]);
+      setIsLoading(false);
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -91,7 +94,7 @@ export default function RequestsPage() {
       setRequests([...mappedReceived, ...mappedSent]);
     } catch (err: any) {
       console.warn("Could not load live requests from user-service:", err.message);
-      // Fallback stays as mockRequests
+      setRequests([]);
     } finally {
       setIsLoading(false);
     }

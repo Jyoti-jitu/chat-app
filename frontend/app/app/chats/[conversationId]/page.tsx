@@ -8,8 +8,6 @@ import { MessageBubble } from "@/components/chat/MessageBubble";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { mockConversations } from "@/lib/mock/conversations";
-import { initialMessages } from "@/lib/mock/messages";
 import { Message } from "@/types/message";
 import { Trash2, AlertTriangle, CheckCircle2, AlertCircle } from "lucide-react";
 import {
@@ -18,7 +16,13 @@ import {
   deleteMessage,
   markMessageAsRead,
 } from "@/lib/api/message";
-import { getConversationDetails, leaveConversation } from "@/lib/api/chat";
+import {
+  getConversationDetails,
+  leaveConversation,
+  createOrGetDirectConversation,
+} from "@/lib/api/chat";
+import { getUserPublicProfile } from "@/lib/api/user";
+import { getStoredToken } from "@/lib/api/auth";
 import { wsClient } from "@/lib/api";
 
 export default function IndividualChatPage({
@@ -36,20 +40,12 @@ export default function IndividualChatPage({
     name: string;
     avatar?: string;
     isOnline?: boolean;
-  }>(() => {
-    const fallback =
-      mockConversations.find((c) => c.id === conversationId) || mockConversations[0];
-    return {
-      id: fallback.id,
-      name: fallback.name,
-      avatar: fallback.avatar,
-      isOnline: fallback.isOnline,
-    };
+  }>({
+    id: conversationId,
+    name: "Chat",
   });
 
-  const [messages, setMessages] = useState<Message[]>(
-    initialMessages[conversationId] || initialMessages["c1"] || []
-  );
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
 
   // Deletion modals state
@@ -74,10 +70,19 @@ export default function IndividualChatPage({
     scrollToBottom();
   }, [messages]);
 
-  // Decode current user ID from token
+  // Decode current user ID from token or stored user
   useEffect(() => {
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    if (typeof window !== "undefined") {
+      const userStr = localStorage.getItem("fluxchat_user");
+      if (userStr) {
+        try {
+          const u = JSON.parse(userStr);
+          if (u.id) setCurrentUserId(u.id);
+        } catch {}
+      }
+    }
+
+    const token = getStoredToken();
     if (token) {
       try {
         const parts = token.split(".");
@@ -93,12 +98,24 @@ export default function IndividualChatPage({
 
   // Fetch live conversation metadata and messages
   const fetchThreadData = useCallback(async () => {
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    const token = getStoredToken();
     if (!token) return;
 
     // 1. Fetch conversation details
-    if (!conversationId.startsWith("c1") && !conversationId.startsWith("c2") && !conversationId.startsWith("c3")) {
+    if (conversationId.startsWith("c_")) {
+      const recipientId = conversationId.replace(/^c_/, "");
+      try {
+        const publicProfile = await getUserPublicProfile(recipientId, token);
+        setConversation({
+          id: conversationId,
+          name: publicProfile.name,
+          avatar: publicProfile.avatar || undefined,
+          isOnline: publicProfile.is_online,
+        });
+      } catch (err: any) {
+        console.warn("Could not fetch recipient profile:", err.message);
+      }
+    } else {
       try {
         const convDetails = await getConversationDetails(conversationId, token);
         setConversation({
@@ -145,9 +162,11 @@ export default function IndividualChatPage({
             markMessageAsRead(item.id, token).catch(() => {});
           }
         }
+      } else {
+        setMessages([]);
       }
     } catch (err: any) {
-      console.warn("Using fallback messages for conversation:", err.message);
+      setMessages([]);
     }
   }, [conversationId, currentUserId]);
 
@@ -251,58 +270,45 @@ export default function IndividualChatPage({
   }, [fetchThreadData, conversationId, currentUserId]);
 
   const handleSendMessage = async (content: string) => {
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    const token = getStoredToken();
+    if (!token) return;
 
-    if (token && !conversationId.startsWith("c1") && !conversationId.startsWith("c2")) {
+    let targetConvId = conversation.id;
+    if (targetConvId.startsWith("c_")) {
+      const recipientId = targetConvId.replace(/^c_/, "");
       try {
-        const created = await sendMessage(
-          conversationId,
-          { content: content.trim(), type: "text" },
-          token
-        );
-        const newMsg: Message = {
-          id: created.id,
-          conversationId: created.conversation_id,
-          senderId: created.sender_id,
-          content: created.content,
-          type: "text",
-          createdAt: created.created_at
-            ? new Date(created.created_at).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : "Now",
-          status: created.status,
-        };
-        setMessages((prev) => [...prev, newMsg]);
+        const directConv = await createOrGetDirectConversation(recipientId, token);
+        targetConvId = directConv.id;
+        setConversation((prev) => ({ ...prev, id: directConv.id }));
       } catch (err: any) {
-        showToast(err.message || "Failed to send message", "error");
+        showToast(err.message || "Could not open conversation", "error");
+        return;
       }
-    } else {
-      // Local demo fallback
-      const newMessage: Message = {
-        id: `m_${Date.now()}`,
-        conversationId: conversation.id,
-        senderId: currentUserId,
-        content,
+    }
+
+    try {
+      const created = await sendMessage(
+        targetConvId,
+        { content: content.trim(), type: "text" },
+        token
+      );
+      const newMsg: Message = {
+        id: created.id,
+        conversationId: created.conversation_id,
+        senderId: created.sender_id,
+        content: created.content,
         type: "text",
-        createdAt: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        status: "delivered",
+        createdAt: created.created_at
+          ? new Date(created.created_at).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "Now",
+        status: created.status,
       };
-
-      setMessages((prev) => [...prev, newMessage]);
-
-      setTimeout(() => {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === newMessage.id ? { ...msg, status: "read" } : msg
-          )
-        );
-      }, 1200);
+      setMessages((prev) => [...prev, newMsg]);
+    } catch (err: any) {
+      showToast(err.message || "Failed to send message", "error");
     }
   };
 
@@ -311,82 +317,70 @@ export default function IndividualChatPage({
     size: string;
     type: "file";
   }) => {
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    const token = getStoredToken();
+    if (!token) return;
 
-    if (token && !conversationId.startsWith("c1") && !conversationId.startsWith("c2")) {
+    let targetConvId = conversation.id;
+    if (targetConvId.startsWith("c_")) {
+      const recipientId = targetConvId.replace(/^c_/, "");
       try {
-        const created = await sendMessage(
-          conversationId,
-          {
-            content: file.name,
-            type: "file",
-            attachment: {
-              name: file.name,
-              size: file.size,
-              url: "#",
-              type: "file",
-            },
-          },
-          token
-        );
-        const newMsg: Message = {
-          id: created.id,
-          conversationId: created.conversation_id,
-          senderId: created.sender_id,
-          content: created.content,
+        const directConv = await createOrGetDirectConversation(recipientId, token);
+        targetConvId = directConv.id;
+        setConversation((prev) => ({ ...prev, id: directConv.id }));
+      } catch (err: any) {
+        showToast(err.message || "Could not open conversation", "error");
+        return;
+      }
+    }
+
+    try {
+      const created = await sendMessage(
+        targetConvId,
+        {
+          content: file.name,
           type: "file",
           attachment: {
             name: file.name,
             size: file.size,
+            url: "#",
             type: "file",
           },
-          createdAt: created.created_at
-            ? new Date(created.created_at).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : "Now",
-          status: created.status,
-        };
-        setMessages((prev) => [...prev, newMsg]);
-      } catch (err: any) {
-        showToast(err.message || "Failed to upload file", "error");
-      }
-    } else {
-      const attachmentMessage: Message = {
-        id: `m_${Date.now()}`,
-        conversationId: conversation.id,
-        senderId: currentUserId,
-        content: "Shared a project file",
+        },
+        token
+      );
+      const newMsg: Message = {
+        id: created.id,
+        conversationId: created.conversation_id,
+        senderId: created.sender_id,
+        content: created.content,
         type: "file",
         attachment: {
           name: file.name,
           size: file.size,
-          type: file.type,
+          type: "file",
         },
-        createdAt: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        status: "delivered",
+        createdAt: created.created_at
+          ? new Date(created.created_at).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "Now",
+        status: created.status,
       };
-      setMessages((prev) => [...prev, attachmentMessage]);
+      setMessages((prev) => [...prev, newMsg]);
+    } catch (err: any) {
+      showToast(err.message || "Failed to upload file", "error");
     }
   };
 
   const handleDeleteMessage = async (id: string) => {
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
-
-    if (token && !id.startsWith("m_")) {
+    const token = getStoredToken();
+    if (token) {
       try {
         await deleteMessage(id, token);
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === id
-              ? { ...m, content: "This message was deleted" }
-              : m
+            m.id === id ? { ...m, content: "This message was deleted" } : m
           )
         );
         showToast("Message deleted");
@@ -406,11 +400,10 @@ export default function IndividualChatPage({
   };
 
   const handleConfirmDeleteChat = async () => {
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
-    if (token && !conversationId.startsWith("c1") && !conversationId.startsWith("c2")) {
+    const token = getStoredToken();
+    if (token) {
       try {
-        await leaveConversation(conversationId, token);
+        await leaveConversation(conversation.id, token);
       } catch (err: any) {
         console.warn("Could not leave conversation on backend:", err.message);
       }

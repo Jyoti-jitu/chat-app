@@ -18,16 +18,27 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Avatar } from "@/components/ui/Avatar";
-import { currentUser } from "@/lib/mock/users";
-import { mockStatuses } from "@/lib/mock/statuses";
 import { UserStatus, StatusSlide } from "@/types/status";
 import { cn } from "@/lib/utils/cn";
 
 export default function StatusPage() {
-  const [statuses, setStatuses] = useState<UserStatus[]>(mockStatuses);
+  const [statuses, setStatuses] = useState<UserStatus[]>([]);
+  const [userName, setUserName] = useState("My Status");
   const [activeStatusIndex, setActiveStatusIndex] = useState<number | null>(null);
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const userStr = localStorage.getItem("fluxchat_user");
+      if (userStr) {
+        try {
+          const u = JSON.parse(userStr);
+          if (u.name) setUserName(u.name);
+        } catch {}
+      }
+    }
+  }, []);
 
   // Create status modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -148,8 +159,27 @@ export default function StatusPage() {
           slides: [newSlide, ...prev[myIdx].slides],
         };
         return [updatedMe, ...prev.filter((_, i) => i !== myIdx)];
+      } else {
+        const initials =
+          userName
+            .split(" ")
+            .map((n) => n[0])
+            .join("")
+            .toUpperCase()
+            .slice(0, 2) || "ME";
+
+        const newMe: UserStatus = {
+          id: `status_me_${Date.now()}`,
+          userId: "u_me",
+          userName: userName,
+          userInitials: initials,
+          isMe: true,
+          viewed: false,
+          lastUpdated: "Just now",
+          slides: [newSlide],
+        };
+        return [newMe, ...prev];
       }
-      return prev;
     });
 
     setStatusText("");
@@ -229,7 +259,7 @@ export default function StatusPage() {
               {/* Avatar with Status Ring */}
               <div className="relative cursor-pointer" onClick={() => myStatus && handleOpenStatus(myStatus.id)}>
                 <div className="p-0.5 rounded-full ring-2 ring-[var(--primary)] ring-offset-2 ring-offset-white dark:ring-offset-[#151D1A]">
-                  <Avatar name={currentUser.name} size="lg" />
+                  <Avatar name={userName} size="lg" />
                 </div>
                 <button
                   type="button"

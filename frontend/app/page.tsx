@@ -8,7 +8,13 @@ import { HeroChatPreview } from "@/components/landing/HeroChatPreview";
 import { FeatureStrip } from "@/components/landing/FeatureStrip";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
-import { mockUsers } from "@/lib/mock/users";
+
+const featuredMembers = [
+  { name: "Alex Rivera" },
+  { name: "Sarah Chen" },
+  { name: "Marcus Johnson" },
+  { name: "Elena Gomez" },
+];
 
 export default function HomePage() {
   return (
@@ -61,7 +67,7 @@ export default function HomePage() {
             {/* Trust Indicators / Social Proof */}
             <div className="pt-6 border-t border-[#E6EBE8] dark:border-[#212E29] flex items-center gap-4">
               <div className="flex -space-x-2">
-                {mockUsers.slice(0, 4).map((user, i) => (
+                {featuredMembers.map((user, i) => (
                   <Avatar
                     key={i}
                     name={user.name}

@@ -15,8 +15,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Tabs } from "@/components/ui/Tabs";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { mockNotifications } from "@/lib/mock/notifications";
 import { NotificationItem, NotificationCategory } from "@/types/notification";
+import { getStoredToken } from "@/lib/api/auth";
 import { cn } from "@/lib/utils/cn";
 import {
   getNotifications,
@@ -28,45 +28,44 @@ import {
 } from "@/lib/api";
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<NotificationItem[]>(mockNotifications);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [activeTab, setActiveTab] = useState<string>("all");
   const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
 
   const fetchLiveNotifications = useCallback(async () => {
-    const token =
-      typeof window !== "undefined"
-        ? localStorage.getItem("fluxchat_access_token") || localStorage.getItem("accessToken")
-        : null;
-    if (!token) return;
+    const token = getStoredToken();
+    if (!token) {
+      setNotifications([]);
+      return;
+    }
 
     try {
       const res = await getNotifications(activeTab, 50, 0, token);
-      if (res.items && res.items.length > 0) {
-        const mapped: NotificationItem[] = res.items.map((item) => ({
-          id: item.id,
-          type: (item.type as any) || "system",
-          category: (item.category as any) || "messages",
-          actor: {
-            name: item.actor.name,
-            username: item.actor.username || undefined,
-            avatar: item.actor.avatar || undefined,
-          },
-          title: item.title || undefined,
-          description: item.description,
-          timestamp: item.created_at
-            ? new Date(item.created_at).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : "Just now",
-          isRead: item.is_read,
-          link: item.link || undefined,
-        }));
-        setNotifications(mapped);
-      }
+      const mapped: NotificationItem[] = (res.items || []).map((item) => ({
+        id: item.id,
+        type: (item.type as any) || "system",
+        category: (item.category as any) || "messages",
+        actor: {
+          name: item.actor.name,
+          username: item.actor.username || undefined,
+          avatar: item.actor.avatar || undefined,
+        },
+        title: item.title || undefined,
+        description: item.description,
+        timestamp: item.created_at
+          ? new Date(item.created_at).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "Just now",
+        isRead: item.is_read,
+        link: item.link || undefined,
+      }));
+      setNotifications(mapped);
     } catch (err: any) {
-      console.warn("Using fallback notifications:", err.message);
+      console.warn("Could not load notifications:", err.message);
+      setNotifications([]);
     }
   }, [activeTab]);
 

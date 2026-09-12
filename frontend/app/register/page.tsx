@@ -20,6 +20,7 @@ import {
   ArrowRight,
   Edit3,
   PhoneCall,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -256,13 +257,6 @@ export default function RegisterPage() {
     setSessionId(null);
   };
 
-  // Localhost development helper (accepts 1234 in dev mode)
-  const handleUseTestOtp = () => {
-    const testCode = ["1", "2", "3", "4"];
-    setOtpCode(testCode);
-    verifyOtpCode(testCode.join(""));
-  };
-
   // Main Registration Form Submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -290,13 +284,23 @@ export default function RegisterPage() {
       return;
     }
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
+    if (!password) {
+      setError("Please enter a password");
       return;
     }
 
     if (password.length < 6) {
       setError("Password must be at least 6 characters");
+      return;
+    }
+
+    if (!confirmPassword) {
+      setError("Please confirm your password");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match. Both passwords must be identical.");
       return;
     }
 
@@ -321,6 +325,7 @@ export default function RegisterPage() {
           username: username.trim().toLowerCase(),
           email: userEmail,
           password: password,
+          confirm_password: confirmPassword,
           phone: normalizedPhone,
           verification_token: verificationToken,
         }),
@@ -330,6 +335,10 @@ export default function RegisterPage() {
         const data = await response.json();
         if (data.access_token) {
           localStorage.setItem("fluxchat_access_token", data.access_token);
+          localStorage.setItem("accessToken", data.access_token);
+        }
+        if (data.user) {
+          localStorage.setItem("fluxchat_user", JSON.stringify(data.user));
         }
         setSuccessNotice(true);
         setTimeout(() => {
@@ -337,13 +346,15 @@ export default function RegisterPage() {
         }, 500);
       } else {
         const errData = await response.json().catch(() => ({}));
-        setError(errData.detail || "Registration failed. Please check your details.");
+        const errorMsg =
+          errData.error?.message ||
+          (Array.isArray(errData.detail) ? errData.detail[0]?.message : errData.detail) ||
+          "Registration failed. Please check your details.";
+        setError(errorMsg);
       }
-    } catch {
-      setSuccessNotice(true);
-      setTimeout(() => {
-        router.push("/app/chats");
-      }, 500);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Network error. Please try again.";
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -593,15 +604,6 @@ export default function RegisterPage() {
                       </button>
                     </div>
                   )}
-
-                  <button
-                    type="button"
-                    onClick={handleUseTestOtp}
-                    title="Dev mode test code (123456)"
-                    className="text-[11px] text-[#66736D] hover:text-[#168F67] dark:hover:text-[#22A06B] underline cursor-pointer ml-auto"
-                  >
-                    Dev code (123456)
-                  </button>
                 </div>
 
                 {/* Confirm Code Button */}
@@ -640,16 +642,30 @@ export default function RegisterPage() {
             />
 
             {/* Confirm Password */}
-            <Input
-              id="confirmPassword"
-              label="Confirm password"
-              type={showPassword ? "text" : "password"}
-              placeholder="••••••••"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              leftIcon={<Lock className="w-4 h-4" />}
-            />
+            <div>
+              <Input
+                id="confirmPassword"
+                label="Confirm password"
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                leftIcon={<Lock className="w-4 h-4" />}
+              />
+              {confirmPassword && password !== confirmPassword && (
+                <p className="text-xs text-rose-500 font-medium flex items-center gap-1.5 mt-1.5 animate-in fade-in duration-150">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>Passwords do not match</span>
+                </p>
+              )}
+              {confirmPassword && password === confirmPassword && password.length >= 6 && (
+                <p className="text-xs text-[#168F67] dark:text-[#22A06B] font-medium flex items-center gap-1.5 mt-1.5 animate-in fade-in duration-150">
+                  <Check className="w-3.5 h-3.5 shrink-0" />
+                  <span>Passwords match</span>
+                </p>
+              )}
+            </div>
 
             {/* Terms checkbox */}
             <div className="pt-1">
@@ -679,6 +695,17 @@ export default function RegisterPage() {
               size="lg"
               className="w-full mt-3 flex items-center justify-center gap-2"
               isLoading={isLoading}
+              disabled={
+                isLoading ||
+                !password ||
+                !confirmPassword ||
+                password !== confirmPassword ||
+                password.length < 6 ||
+                !isPhoneVerified ||
+                !fullName.trim() ||
+                !username.trim() ||
+                !agreedToTerms
+              }
             >
               <span>Create account</span>
               <ArrowRight className="w-4 h-4" />

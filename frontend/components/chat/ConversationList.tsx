@@ -8,8 +8,6 @@ import { Modal } from "@/components/ui/Modal";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { mockConversations } from "@/lib/mock/conversations";
-import { mockUsers } from "@/lib/mock/users";
 import { Conversation } from "@/types/conversation";
 import { useRouter } from "next/navigation";
 import {
@@ -27,7 +25,7 @@ export interface ConversationListProps {
 
 export function ConversationList({ activeId, className }: ConversationListProps) {
   const router = useRouter();
-  const [conversations, setConversations] = useState<Conversation[]>(mockConversations);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [contacts, setContacts] = useState<ContactItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
@@ -38,9 +36,16 @@ export function ConversationList({ activeId, className }: ConversationListProps)
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
+  const getAuthToken = () => {
+    if (typeof window === "undefined") return null;
+    return (
+      localStorage.getItem("fluxchat_access_token") ||
+      localStorage.getItem("accessToken")
+    );
+  };
+
   const fetchConversations = useCallback(async () => {
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    const token = getAuthToken();
     if (!token) return;
 
     try {
@@ -77,8 +82,7 @@ export function ConversationList({ activeId, className }: ConversationListProps)
   }, []);
 
   const fetchContactsList = useCallback(async () => {
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    const token = getAuthToken();
     if (!token) return;
 
     try {
@@ -95,8 +99,7 @@ export function ConversationList({ activeId, className }: ConversationListProps)
   }, [fetchConversations, fetchContactsList]);
 
   const handleDeleteConversation = async (id: string) => {
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    const token = getAuthToken();
 
     if (token && !id.startsWith("c1") && !id.startsWith("c2")) {
       try {
@@ -113,10 +116,9 @@ export function ConversationList({ activeId, className }: ConversationListProps)
   };
 
   const handleStartDirectChat = async (targetUserId: string) => {
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    const token = getAuthToken();
 
-    if (token && !targetUserId.startsWith("u_") && !targetUserId.startsWith("u1")) {
+    if (token) {
       try {
         setIsCreating(true);
         const conv = await createOrGetDirectConversation(targetUserId, token);
@@ -138,32 +140,27 @@ export function ConversationList({ activeId, className }: ConversationListProps)
     e.preventDefault();
     if (!groupName.trim() || selectedContactIds.length === 0) return;
 
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    const token = getAuthToken();
+    if (!token) return;
 
-    if (token) {
-      try {
-        setIsCreating(true);
-        const conv = await createGroupConversation(
-          {
-            name: groupName.trim(),
-            member_ids: selectedContactIds,
-          },
-          token
-        );
-        setIsNewChatModalOpen(false);
-        setGroupName("");
-        setSelectedContactIds([]);
-        await fetchConversations();
-        router.push(`/app/chats/${conv.id}`);
-      } catch (err: any) {
-        alert(err.message || "Failed to create group conversation");
-      } finally {
-        setIsCreating(false);
-      }
-    } else {
+    try {
+      setIsCreating(true);
+      const conv = await createGroupConversation(
+        {
+          name: groupName.trim(),
+          member_ids: selectedContactIds,
+        },
+        token
+      );
       setIsNewChatModalOpen(false);
-      router.push("/app/chats/c3");
+      setGroupName("");
+      setSelectedContactIds([]);
+      await fetchConversations();
+      router.push(`/app/chats/${conv.id}`);
+    } catch (err: any) {
+      alert(err.message || "Failed to create group conversation");
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -333,28 +330,11 @@ export function ConversationList({ activeId, className }: ConversationListProps)
                 </div>
               ))
             ) : (
-              mockUsers.map((user) => (
-                <div
-                  key={user.id}
-                  onClick={() => handleStartDirectChat(user.id)}
-                  className="flex items-center justify-between p-3 rounded-xl hover:bg-[#F7F9F8] dark:hover:bg-[#1D2723] transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <Avatar name={user.name} size="sm" isOnline={user.isOnline} />
-                    <div className="text-left">
-                      <div className="text-xs font-bold text-[#17211D] dark:text-[#F1F5F3]">
-                        {user.name}
-                      </div>
-                      <div className="text-[11px] text-[#66736D] dark:text-[#8E9C95]">
-                        @{user.username}
-                      </div>
-                    </div>
-                  </div>
-                  <Button variant="secondary" size="sm">
-                    Message
-                  </Button>
-                </div>
-              ))
+              <div className="py-8 text-center text-[#66736D] dark:text-[#8E9C95] text-xs">
+                <Users className="w-8 h-8 mx-auto mb-2 opacity-40 text-[#66736D]" />
+                <p className="font-semibold text-sm text-[#17211D] dark:text-[#F1F5F3]">No contacts found</p>
+                <p className="text-[11px] mt-1">Add contacts first from the Contacts tab to start a chat.</p>
+              </div>
             )}
           </div>
         ) : (
@@ -372,43 +352,46 @@ export function ConversationList({ activeId, className }: ConversationListProps)
                 Select Participants ({selectedContactIds.length} selected)
               </label>
               <div className="space-y-1.5 max-h-48 overflow-y-auto border border-[#E6EBE8] dark:border-[#212E29] rounded-xl p-2">
-                {(contacts.length > 0 ? contacts : mockUsers).map((item: any) => {
-                  const id = item.contact_id || item.id;
-                  const name = item.user?.name || item.name;
-                  const username = item.user?.username || item.username;
-                  const isSelected = selectedContactIds.includes(id);
+                {contacts.length > 0 ? (
+                  contacts.map((item: any) => {
+                    const id = item.contact_id || item.id;
+                    const name = item.user?.name || item.name;
+                    const username = item.user?.username || item.username;
+                    const isSelected = selectedContactIds.includes(id);
 
-                  return (
-                    <div
-                      key={id}
-                      onClick={() => toggleContactSelection(id)}
-                      className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
-                        isSelected
-                          ? "bg-[var(--primary-light)] text-[var(--primary)]"
-                          : "hover:bg-[#F7F9F8] dark:hover:bg-[#1D2723]"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Avatar name={name} size="sm" />
-                        <div className="text-left">
-                          <p className="text-xs font-semibold">{name}</p>
-                          <p className="text-[10px] text-[#66736D] dark:text-[#8E9C95]">
-                            @{username}
-                          </p>
-                        </div>
-                      </div>
+                    return (
                       <div
-                        className={`w-4 h-4 rounded-md border flex items-center justify-center transition-colors ${
+                        key={id}
+                        onClick={() => toggleContactSelection(id)}
+                        className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
                           isSelected
-                            ? "bg-[#168F67] border-[#168F67] text-white"
-                            : "border-[#CFD6D2] dark:border-[#3D4C45]"
+                            ? "bg-[var(--primary-light)] text-[var(--primary)]"
+                            : "hover:bg-[#F7F9F8] dark:hover:bg-[#1D2723]"
                         }`}
                       >
-                        {isSelected && <Check className="w-3 h-3" />}
+                        <div className="flex items-center gap-2.5">
+                          <Avatar name={name} size="sm" />
+                          <div className="text-left">
+                            <p className="text-xs font-semibold">{name}</p>
+                            <p className="text-[10px] text-[#66736D] dark:text-[#8E9C95]">
+                              @{username}
+                            </p>
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}}
+                          className="rounded border-[#E6EBE8] text-[#168F67] focus:ring-[#168F67]"
+                        />
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                ) : (
+                  <p className="text-center py-4 text-xs text-[#66736D] dark:text-[#8E9C95]">
+                    No contacts available to add.
+                  </p>
+                )}
               </div>
             </div>
 
