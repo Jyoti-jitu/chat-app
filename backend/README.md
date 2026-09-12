@@ -625,15 +625,15 @@ This document serves as the master engineering blueprint and step-by-step implem
   - Run specific categories: `./run_all_tests.sh shared`, `./run_all_tests.sh services`, or `./run_all_tests.sh e2e`
 - **Verification Results**:
   - **Shared Infrastructure, Security & Redis**: 14 tests passing (`shared/`)
-  - **API Gateway Service**: 11 tests passing (`services/api-gateway/tests/`)
-  - **Auth Service**: 9 tests passing (`services/auth-service/tests/`)
+  - **API Gateway Service**: 15 tests passing (`services/api-gateway/tests/`)
+  - **Auth Service**: 10 tests passing (`services/auth-service/tests/`)
   - **User Service**: 4 tests passing (`services/user-service/tests/`)
   - **Chat Service**: 2 tests passing (`services/chat-service/tests/`)
   - **Message Service**: 3 tests passing (`services/message-service/tests/`)
   - **WebSocket Service**: 3 tests passing (`services/websocket-service/tests/`)
   - **Notification Service**: 2 tests passing (`services/notification-service/tests/`)
   - **E2E Full User Journey Cluster Test**: 2 tests passing (`tests/e2e/test_full_journey.py`)
-  - **Total**: 50 tests across 9 suites passing with 100% success rate (0 failures).
+  - **Total**: 55 tests across 9 suites passing with 100% success rate (0 failures).
 - **CI/CD Automation**: `.github/workflows/ci.yml` providing automated verification for Next.js frontend builds and backend test suites on every push and PR.
 
 ---
@@ -763,7 +763,7 @@ This document serves as the master engineering blueprint and step-by-step implem
 - **Phase 22 (Structured JSON Logging)**: ✅ **Completed & Verified** (Credential redaction, request ID correlation, latency tracking).
 - **Phase 23 (Security & Hardening)**: ✅ **Completed & Verified** (IDOR guards, NoSQL injection protection, Redis rate limiting).
 - **Phase 24 (MongoDB Atlas Indexes)**: ✅ **Completed & Verified** (Compound, unique, and TTL indexes applied to live cluster).
-- **Phase 25 (Automated Test Suite & E2E Test Harness)**: ✅ **Completed & Verified** (Master test runner `run_all_tests.sh`, 50/50 tests passing in 95s, CI/CD pipeline).
+- **Phase 25 (Automated Test Suite & E2E Test Harness)**: ✅ **Completed & Verified** (Master test runner `run_all_tests.sh`, 55/55 tests passing in 95s, CI/CD pipeline).
 - **Phase 26 (Docker Containerization & Compose Orchestration)**: ✅ **Completed & Verified** (Multi-stage Dockerfiles for all 7 microservices, Redis, Next.js standalone frontend, compose orchestration).
 - **Phase 27 (Environment Configuration & 12-Factor Compliance)**: ✅ **Completed & Verified** (Root & service `.env.example` templates, `validator.py`, `verify_env.py` diagnostic tool, production checklist).
 - **Phase 28 (OpenAPI & API Documentation)**: ✅ **Completed & Verified** (Multi-spec Swagger portal at `:8000/docs`, ReDoc, `export_openapi.py` with 62 endpoints, `API_DOCUMENTATION.md`).

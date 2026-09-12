@@ -110,9 +110,10 @@ class GatewayMiddleware(BaseHTTPMiddleware):
         # Tag request ID
         req_id = request.headers.get("x-request-id") or f"req_{uuid.uuid4().hex[:12]}"
 
-        # Bypass rate limit on health checks
+        # Bypass rate limit on health checks and root
         path = request.url.path
         if path in (
+            "/",
             "/health",
             "/health/live",
             "/health/ready",
@@ -196,7 +197,19 @@ app.add_middleware(
     expose_headers=["x-request-id", "x-ratelimit-limit", "x-ratelimit-remaining", "x-ratelimit-reset"],
 )
 
-# Root Health & Probe Endpoints
+# Root Descriptor, Health & Probe Endpoints
+@app.get("/", tags=["Descriptor"])
+async def root_descriptor():
+    return {
+        "service": "FluxChat API Gateway",
+        "version": settings.VERSION,
+        "environment": settings.ENVIRONMENT,
+        "docs_url": "/docs",
+        "health_url": "/health",
+        "services_url": "/api/v1/gateway/services",
+    }
+
+
 @app.get("/health", tags=["Health"])
 async def root_health():
     return await cluster_health()
