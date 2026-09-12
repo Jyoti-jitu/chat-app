@@ -92,49 +92,65 @@ async def test_websocket_lifecycle_and_presence():
     try:
         token = generate_test_token(user_id, user_doc["email"], user_doc["username"])
 
-        # 2. Connect via TestClient
-        client = TestClient(app)
-        with client.websocket_connect(f"/ws?token={token}") as websocket:
-            # 3. Receive connection ACK
-            ack_frame = websocket.receive_json()
-            assert ack_frame["event"] == "connection.ack"
-            assert ack_frame["data"]["user_id"] == user_id
+        # 2. Connect via TestClient with lifespan context
+        with TestClient(app) as client:
+            with client.websocket_connect(f"/ws?token={token}") as websocket:
+                # 3. Receive connection ACK
+                ack_frame = websocket.receive_json()
+                assert ack_frame["event"] == "connection.ack"
+                assert ack_frame["data"]["user_id"] == user_id
 
-            # 4. Exchange ping / pong
-            websocket.send_json({"event": "ping", "data": {}})
-            pong_frame = websocket.receive_json()
-            assert pong_frame["event"] == "pong"
-            assert "timestamp" in pong_frame
+                # 4. Exchange ping / pong
+                websocket.send_json({"event": "ping", "data": {}})
+                pong_frame = websocket.receive_json()
+                assert pong_frame["event"] == "pong"
+                assert "timestamp" in pong_frame
 
-            # 5. Check Presence REST endpoints while connected
-            transport = ASGITransport(app=app)
-            async with AsyncClient(transport=transport, base_url="http://test") as ac:
-                pres_res = await ac.get(f"/api/v1/presence/{user_id}")
-                assert pres_res.status_code == 200
-                assert pres_res.json()["is_online"] is True
+                # 5. Check Presence REST endpoints while connected
+                transport = ASGITransport(app=app)
+                async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                    pres_res = await ac.get(f"/api/v1/presence/{user_id}")
+                    assert pres_res.status_code == 200
+                    assert pres_res.json()["is_online"] is True
 
-                online_res = await ac.get("/api/v1/presence/online")
-                assert online_res.status_code == 200
-                assert user_id in online_res.json()["online_users"]
+                    online_res = await ac.get("/api/v1/presence/online")
+                    assert online_res.status_code == 200
+                    assert user_id in online_res.json()["online_users"]
 
-                # 6. Test REST event broadcast bridge
-                broadcast_res = await ac.post(
-                    "/api/v1/events/broadcast",
-                    json={
-                        "event": "system.notice",
-                        "data": {"text": "Server scheduled maintenance"},
-                        "recipient_ids": [user_id],
-                    },
-                )
-                assert broadcast_res.status_code == 200
-                assert broadcast_res.json()["status"] == "delivered"
+                    # 6. Test REST event broadcast bridge
+                    broadcast_res = await ac.post(
+                        "/api/v1/events/broadcast",
+                        json={
+                            "event": "system.notice",
+                            "data": {"text": "Server scheduled maintenance"},
+                            "recipient_ids": [user_id],
+                        },
+                    )
+                    assert broadcast_res.status_code == 200
+                    assert broadcast_res.json()["status"] == "delivered"
 
-            # 7. Verify the socket received the broadcast event
-            received_broadcast = websocket.receive_json()
-            assert received_broadcast["event"] == "system.notice"
-            assert received_broadcast["data"]["text"] == "Server scheduled maintenance"
+                # 7. Verify the socket received the broadcast event
+                received_broadcast = websocket.receive_json()
+                assert received_broadcast["event"] == "system.notice"
+                assert received_broadcast["data"]["text"] == "Server scheduled maintenance"
 
-        # 8. After socket closed, verify user is disconnected
+                # 8. Test REST event broadcast to all users
+                transport = ASGITransport(app=app)
+                async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                    broadcast_all = await ac.post(
+                        "/api/v1/events/broadcast",
+                        json={
+                            "event": "global.alert",
+                            "data": {"message": "Global system notification"},
+                        },
+                    )
+                    assert broadcast_all.status_code == 200
+
+                received_global = websocket.receive_json()
+                assert received_global["event"] == "global.alert"
+                assert received_global["data"]["message"] == "Global system notification"
+
+        # 9. After socket closed, verify user is disconnected
         assert connection_manager.is_user_online(user_id) is False
 
     finally:

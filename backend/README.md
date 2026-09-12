@@ -432,30 +432,31 @@ This document serves as the master engineering blueprint and step-by-step implem
 ---
 
 ### Phase 13 — Redis Foundation (Pub/Sub & Caching)
-- **Objective**: Connect Redis to enable horizontal scaling and distributed event broadcasting.
+- **Status**: ✅ **COMPLETED & VERIFIED**
+- **Objective**: Connect Redis to enable horizontal scaling, distributed event broadcasting, and high-performance caching.
 - **Architecture**:
   ```text
-  WebSocket Service 1 ──┐
-                        ├──> Redis Pub/Sub (channel: conversation:{id})
-  WebSocket Service 2 ──┘
+  Message Service ──> Redis Pub/Sub (channel: fluxchat:events) ──> WebSocket Workers ──> Client Sockets
   ```
 - **Implementation**:
-  - Connect to Redis using `redis-py` (asyncio).
-  - Subscribe WebSocket workers to relevant conversation channels.
-  - Publish message events to Redis; all workers holding recipient sockets receive and forward frames.
+  - Created [`backend/shared/redis/client.py`](file:///Users/apple/Desktop/project/chat-app/backend/shared/redis/client.py) with `RedisManager` supporting real Redis (`redis.asyncio`) with transparent resilient async in-memory Pub/Sub and KV caching fallback (`InMemoryRedis` & `InMemoryPubSub`).
+  - Key-Value operations (`set`, `get`, `delete`), counters (`incr`, `decr`), sets (`sadd`, `srem`, `smembers`), and non-blocking channel subscribers (`pubsub()`, `publish()`).
+  - Automated test suite in `backend/shared/redis/test_redis.py` (100% pass rate).
 
 ---
 
 ### Phase 14 — End-to-End Real-Time Message Flow
+- **Status**: ✅ **COMPLETED & VERIFIED**
 - **Objective**: Complete end-to-end pipeline from client input to DB persistence and live socket push.
-- **Step-by-Step Flow**:
-  1. User A types message in frontend and sends via WebSocket frame.
-  2. WebSocket Service validates frame and calls Message Service.
-  3. Message Service persists document in MongoDB Atlas.
-  4. Message Service publishes `message.new` to Redis Pub/Sub channel.
-  5. Redis broadcasts event to all subscribed WebSocket instances.
-  6. Recipient's WebSocket instance pushes frame to User B's open socket.
-  7. If User B is offline, Notification Service receives Redis event and enqueues notification.
+- **Architecture & Implementation**:
+  1. User dispatches message from frontend UI or REST API.
+  2. Message Service validates sender membership and persists document to MongoDB Atlas.
+  3. Message Service publishes `message.new` frame to Redis channel `fluxchat:events`.
+  4. WebSocket Service receives Redis event via background worker and relays frame to connected recipient sockets.
+  5. Next.js active chat view (`app/app/chats/[conversationId]/page.tsx`) receives `message.new` over WebSocket and appends it to thread with deduplication and animated typing indicators.
+  6. Edits (`message.updated`), soft deletions (`message.deleted`), and read receipts (`message.read`) broadcast across the same distributed pipeline.
+- **Verification**: Verified with automated test suites across Redis, Message Service, and WebSocket Service.
+
 
 ---
 

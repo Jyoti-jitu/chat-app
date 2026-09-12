@@ -10,14 +10,15 @@ from app.api.v1.router import api_v1_router
 from app.core.config import settings
 from app.core.logging import logger
 from shared.database.mongodb import db_manager
+from shared.redis.client import redis_manager
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Application lifespan manager.
-    Initializes and validates MongoDB connection on startup,
-    and safely closes it on application shutdown.
+    Initializes and validates MongoDB and Redis connections on startup,
+    and safely closes them on application shutdown.
     """
     logger.info(
         f"Starting {settings.APP_NAME} in [{settings.APP_ENV}] mode on {settings.HOST}:{settings.PORT}..."
@@ -32,11 +33,14 @@ async def lifespan(app: FastAPI):
         logger.critical(f"Failed to connect to MongoDB Atlas during startup: {exc}")
         raise exc
 
+    await redis_manager.connect()
+
     yield
 
     logger.info(f"Shutting down {settings.APP_NAME}...")
+    await redis_manager.disconnect()
     await db_manager.disconnect()
-    logger.info("MongoDB connection closed gracefully.")
+    logger.info("MongoDB and Redis connections closed gracefully.")
 
 
 app = FastAPI(

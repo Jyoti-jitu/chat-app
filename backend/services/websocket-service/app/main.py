@@ -10,15 +10,50 @@ from app.api.v1.router import api_v1_router
 from app.api.v1.websockets import router as root_websockets_router
 from app.core.config import settings
 from app.core.logging import logger
+import asyncio
+import json
+from app.core.connection_manager import connection_manager
 from shared.database.mongodb import db_manager
+from shared.redis.client import redis_manager
+
+
+async def redis_event_listener():
+    """Listens to Redis channels and forwards real-time events to connected clients."""
+    ps = redis_manager.pubsub()
+    await ps.subscribe("system:broadcast", "fluxchat:events")
+    logger.info("Subscribed to Redis Pub/Sub channels ['system:broadcast', 'fluxchat:events'].")
+    try:
+        async for message in ps.listen():
+            try:
+                raw_data = message.get("data")
+                if not raw_data:
+                    continue
+                payload = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
+                recipients = payload.get("recipients") or payload.get("members")
+                exclude_user = payload.get("exclude_user_id") or payload.get("sender_id")
+
+                if recipients and isinstance(recipients, list):
+                    await connection_manager.broadcast_to_users(
+                        payload, recipients, exclude_user_id=exclude_user
+                    )
+                else:
+                    await connection_manager.broadcast_to_all(
+                        payload, exclude_user_id=exclude_user
+                    )
+            except Exception as e:
+                logger.warning(f"Error handling incoming Redis event frame: {e}")
+    except asyncio.CancelledError:
+        pass
+    finally:
+        await ps.close()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Application lifespan manager.
-    Initializes and validates MongoDB connection on startup,
-    and safely closes it on application shutdown.
+    Initializes MongoDB and Redis connections on startup,
+    and safely closes them on application shutdown.
     """
     logger.info(
         f"Starting {settings.APP_NAME} in [{settings.APP_ENV}] mode on {settings.HOST}:{settings.PORT}..."
@@ -33,11 +68,20 @@ async def lifespan(app: FastAPI):
         logger.critical(f"Failed to connect to MongoDB Atlas during startup: {exc}")
         raise exc
 
+    await redis_manager.connect()
+    listener_task = asyncio.create_task(redis_event_listener())
+
     yield
 
     logger.info(f"Shutting down {settings.APP_NAME}...")
+    listener_task.cancel()
+    try:
+        await listener_task
+    except asyncio.CancelledError:
+        pass
+    await redis_manager.disconnect()
     await db_manager.disconnect()
-    logger.info("MongoDB connection closed gracefully.")
+    logger.info("MongoDB and Redis connections closed gracefully.")
 
 
 app = FastAPI(

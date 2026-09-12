@@ -19,6 +19,7 @@ import {
   markMessageAsRead,
 } from "@/lib/api/message";
 import { getConversationDetails, leaveConversation } from "@/lib/api/chat";
+import { wsClient } from "@/lib/api";
 
 export default function IndividualChatPage({
   params,
@@ -49,6 +50,7 @@ export default function IndividualChatPage({
   const [messages, setMessages] = useState<Message[]>(
     initialMessages[conversationId] || initialMessages["c1"] || []
   );
+  const [isTyping, setIsTyping] = useState(false);
 
   // Deletion modals state
   const [isDeleteChatModalOpen, setIsDeleteChatModalOpen] = useState(false);
@@ -151,7 +153,102 @@ export default function IndividualChatPage({
 
   useEffect(() => {
     fetchThreadData();
-  }, [fetchThreadData]);
+
+    // Establish WebSocket connection and listen for live events
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("fluxchat_access_token") || localStorage.getItem("accessToken")
+        : null;
+
+    if (token) {
+      wsClient.connect(token);
+
+      const handleNewMessage = (payload: any) => {
+        const msgData = payload.data || payload;
+        if (msgData.conversation_id === conversationId) {
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === msgData.id)) return prev;
+            return [
+              ...prev,
+              {
+                id: msgData.id,
+                conversationId: msgData.conversation_id,
+                senderId: msgData.sender_id,
+                content: msgData.content,
+                type: (msgData.type as "text" | "file") || "text",
+                attachment: msgData.attachment
+                  ? {
+                      name: msgData.attachment.name,
+                      size: msgData.attachment.size,
+                      type: "file",
+                    }
+                  : undefined,
+                createdAt: msgData.created_at
+                  ? new Date(msgData.created_at).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "Now",
+                status: msgData.status || "sent",
+              },
+            ];
+          });
+        }
+      };
+
+      const handleUpdatedMessage = (payload: any) => {
+        const msgData = payload.data || payload;
+        if (msgData.conversation_id === conversationId) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgData.id ? { ...m, content: msgData.content } : m
+            )
+          );
+        }
+      };
+
+      const handleDeletedMessage = (payload: any) => {
+        const msgData = payload.data || payload;
+        if (msgData.conversation_id === conversationId) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgData.id
+                ? { ...m, content: "This message was deleted" }
+                : m
+            )
+          );
+        }
+      };
+
+      const handleTypingStart = (payload: any) => {
+        const data = payload.data || payload;
+        if (data.conversation_id === conversationId && data.user_id !== currentUserId) {
+          setIsTyping(true);
+        }
+      };
+
+      const handleTypingStop = (payload: any) => {
+        const data = payload.data || payload;
+        if (data.conversation_id === conversationId) {
+          setIsTyping(false);
+        }
+      };
+
+      wsClient.on("message.new", handleNewMessage);
+      wsClient.on("message.updated", handleUpdatedMessage);
+      wsClient.on("message.deleted", handleDeletedMessage);
+      wsClient.on("typing.start", handleTypingStart);
+      wsClient.on("typing.stop", handleTypingStop);
+
+      return () => {
+        wsClient.off("message.new", handleNewMessage);
+        wsClient.off("message.updated", handleUpdatedMessage);
+        wsClient.off("message.deleted", handleDeletedMessage);
+        wsClient.off("typing.start", handleTypingStart);
+        wsClient.off("typing.stop", handleTypingStop);
+      };
+    }
+  }, [fetchThreadData, conversationId, currentUserId]);
 
   const handleSendMessage = async (content: string) => {
     const token =
@@ -386,6 +483,17 @@ export default function IndividualChatPage({
                 No messages here yet
               </p>
               <p>Send a message below to start the conversation.</p>
+            </div>
+          )}
+
+          {isTyping && (
+            <div className="flex items-center gap-2 py-2 px-3 rounded-2xl bg-[#F4F6F5] dark:bg-[#1D2723] w-fit text-xs text-[#66736D] dark:text-[#8E9C95] animate-pulse">
+              <span className="inline-flex gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-bounce" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-bounce [animation-delay:0.2s]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-bounce [animation-delay:0.4s]" />
+              </span>
+              <span>{conversation.name} is typing...</span>
             </div>
           )}
 
