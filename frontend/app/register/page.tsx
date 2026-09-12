@@ -20,12 +20,6 @@ import {
   ArrowRight,
   Edit3,
 } from "lucide-react";
-import {
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
-  ConfirmationResult,
-} from "firebase/auth";
-import { auth } from "@/lib/firebase";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { PhoneInput, COUNTRIES, Country } from "@/components/ui/PhoneInput";
@@ -45,16 +39,16 @@ export default function RegisterPage() {
   const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[0]);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isPhoneVerified, setIsPhoneVerified] = useState(false);
-  const [firebaseIdToken, setFirebaseIdToken] = useState<string | null>(null);
+  const [verificationToken, setVerificationToken] = useState<string | null>(null);
 
-  // OTP Verification State
+  // 2Factor OTP Verification State
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [otpCode, setOtpCode] = useState(["", "", "", "", "", ""]);
   const [resendCountdown, setResendCountdown] = useState(0);
   const [verificationSuccess, setVerificationSuccess] = useState(false);
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
 
   // Password & UI State
   const [password, setPassword] = useState("");
@@ -68,22 +62,6 @@ export default function RegisterPage() {
 
   // Refs
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
-  const recaptchaContainerRef = useRef<HTMLDivElement | null>(null);
-
-  // Clean up reCAPTCHA verifier on unmount
-  useEffect(() => {
-    return () => {
-      if (recaptchaVerifierRef.current) {
-        try {
-          recaptchaVerifierRef.current.clear();
-        } catch {
-          // ignore cleanup errors
-        }
-        recaptchaVerifierRef.current = null;
-      }
-    };
-  }, []);
 
   // Resend countdown timer
   useEffect(() => {
@@ -104,66 +82,13 @@ export default function RegisterPage() {
     return `${selectedCountry.dialCode}${withoutLeadingZero}`;
   };
 
-  // Human-friendly Firebase error messages
-  const getFirebaseErrorMessage = (err: unknown): string => {
-    const firebaseErr = err as { code?: string; message?: string };
-    const code = firebaseErr?.code || "";
-
-    switch (code) {
-      case "auth/invalid-phone-number":
-        return "Please enter a valid mobile phone number.";
-      case "auth/invalid-verification-code":
-        return "Invalid 6-digit OTP code. Please verify and try again.";
-      case "auth/code-expired":
-        return "OTP code has expired. Please request a new OTP.";
-      case "auth/too-many-requests":
-        return "Too many attempts. Please wait a few moments before trying again.";
-      case "auth/quota-exceeded":
-        return "SMS quota exceeded. For localhost testing, use test phone numbers in Firebase Console.";
-      case "auth/captcha-check-failed":
-        return "reCAPTCHA verification failed. Please try again.";
-      case "auth/billing-not-enabled":
-        return "Firebase SMS requires Blaze plan or test numbers in Firebase Console.";
-      default:
-        return firebaseErr?.message || "Verification failed. Please try again.";
-    }
-  };
-
-  // Initialize or retrieve singleton RecaptchaVerifier
-  const getOrCreateRecaptchaVerifier = (): RecaptchaVerifier | null => {
-    if (recaptchaVerifierRef.current) {
-      return recaptchaVerifierRef.current;
-    }
-
-    if (!recaptchaContainerRef.current) {
-      return null;
-    }
-
-    try {
-      const verifier = new RecaptchaVerifier(auth, recaptchaContainerRef.current, {
-        size: "invisible",
-        callback: () => {
-          // reCAPTCHA solved automatically
-        },
-        "expired-callback": () => {
-          setOtpError("reCAPTCHA expired. Please resend the code.");
-        },
-      });
-      recaptchaVerifierRef.current = verifier;
-      return verifier;
-    } catch (err) {
-      console.warn("Recaptcha initialization notice:", err);
-      return null;
-    }
-  };
-
   // Reset verification state if phone number changes
   const handlePhoneChange = (val: string) => {
     setPhoneNumber(val);
     if (isPhoneVerified) {
       setIsPhoneVerified(false);
-      setFirebaseIdToken(null);
-      setConfirmationResult(null);
+      setVerificationToken(null);
+      setSessionId(null);
     }
   };
 
@@ -172,18 +97,18 @@ export default function RegisterPage() {
     setSelectedCountry(country);
     if (isPhoneVerified) {
       setIsPhoneVerified(false);
-      setFirebaseIdToken(null);
-      setConfirmationResult(null);
+      setVerificationToken(null);
+      setSessionId(null);
     }
   };
 
-  // Trigger Send Firebase Phone OTP
+  // Request SMS OTP via Backend 2Factor API
   const handleInitiateVerify = async () => {
     const formattedPhone = getNormalizedPhoneNumber();
     const cleanNumber = phoneNumber.replace(/\D/g, "");
 
-    if (!cleanNumber || cleanNumber.length < 7) {
-      setError("Please enter a valid mobile number first.");
+    if (!cleanNumber || cleanNumber.length < 10) {
+      setError("Please enter a valid 10-digit Indian mobile number first.");
       return;
     }
 
@@ -192,46 +117,34 @@ export default function RegisterPage() {
     setIsSendingOtp(true);
 
     try {
-      // Clear previous verifier instance to avoid stale reCAPTCHA tokens on resend
-      if (recaptchaVerifierRef.current) {
-        try {
-          recaptchaVerifierRef.current.clear();
-        } catch {
-          // ignore
-        }
-        recaptchaVerifierRef.current = null;
+      const response = await fetch(`${API_BASE_URL}/auth/send-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: formattedPhone,
+          purpose: "register",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Failed to dispatch SMS OTP. Please check the number.");
       }
 
-      const appVerifier = getOrCreateRecaptchaVerifier();
-      if (!appVerifier) {
-        throw new Error("Unable to initialize reCAPTCHA verifier.");
-      }
-
-      const confirmation = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
-      setConfirmationResult(confirmation);
+      setSessionId(data.session_id);
       setIsVerifying(true);
-      setResendCountdown(30);
+      setResendCountdown(data.resend_cooldown || 30);
       setOtpCode(["", "", "", "", "", ""]);
 
       // Focus first OTP input
       setTimeout(() => {
         otpInputRefs.current[0]?.focus();
       }, 150);
-    } catch (err) {
-      console.error("Firebase send OTP error:", err);
-      const userMessage = getFirebaseErrorMessage(err);
-      setError(userMessage);
-      setOtpError(userMessage);
-
-      // Reset verifier on error to prevent broken reCAPTCHA state
-      if (recaptchaVerifierRef.current) {
-        try {
-          recaptchaVerifierRef.current.clear();
-        } catch {
-          // ignore
-        }
-        recaptchaVerifierRef.current = null;
-      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to send OTP.";
+      setError(msg);
+      setOtpError(msg);
     } finally {
       setIsSendingOtp(false);
     }
@@ -282,7 +195,7 @@ export default function RegisterPage() {
     }
   };
 
-  // Verify OTP submission with Firebase confirmationResult.confirm()
+  // Verify OTP submission via Backend 2Factor API
   const verifyOtpCode = async (codeToVerify?: string) => {
     const code = codeToVerify || otpCode.join("");
     if (code.length < 6) {
@@ -290,8 +203,8 @@ export default function RegisterPage() {
       return;
     }
 
-    if (!confirmationResult) {
-      setOtpError("Verification session expired. Please resend OTP.");
+    if (!sessionId) {
+      setOtpError("Session expired. Please request a new OTP.");
       return;
     }
 
@@ -299,22 +212,33 @@ export default function RegisterPage() {
     setIsVerifyingOtp(true);
 
     try {
-      // Cryptographically verify OTP with Firebase Auth
-      const result = await confirmationResult.confirm(code);
-      const user = result.user;
-      const idToken = await user.getIdToken();
+      const formattedPhone = getNormalizedPhoneNumber();
+      const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          otp: code,
+          phone: formattedPhone,
+        }),
+      });
 
-      setFirebaseIdToken(idToken);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Invalid OTP code. Please try again.");
+      }
+
+      setVerificationToken(data.verification_token);
       setIsPhoneVerified(true);
       setIsVerifying(false);
       setVerificationSuccess(true);
       setError("");
 
       setTimeout(() => setVerificationSuccess(false), 4000);
-    } catch (err) {
-      console.error("Firebase OTP confirmation error:", err);
-      const message = getFirebaseErrorMessage(err);
-      setOtpError(message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Verification failed.";
+      setOtpError(msg);
     } finally {
       setIsVerifyingOtp(false);
     }
@@ -325,10 +249,10 @@ export default function RegisterPage() {
     setIsVerifying(false);
     setOtpCode(["", "", "", "", "", ""]);
     setOtpError("");
-    setConfirmationResult(null);
+    setSessionId(null);
   };
 
-  // Localhost development helper (for test phone numbers configured in Firebase Console)
+  // Localhost development helper (accepts 123456 in dev mode)
   const handleUseTestOtp = () => {
     const testCode = ["1", "2", "3", "4", "5", "6"];
     setOtpCode(testCode);
@@ -355,9 +279,9 @@ export default function RegisterPage() {
       return;
     }
 
-    // Step 4 Requirement: If phone is not verified, prompt OTP verification first
+    // Require phone OTP verification before account creation
     if (!isPhoneVerified) {
-      setError("Please verify your mobile number with OTP before creating your account.");
+      setError("Please verify your mobile number with SMS OTP before creating your account.");
       await handleInitiateVerify();
       return;
     }
@@ -380,7 +304,6 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      // Send registration to existing backend API
       const normalizedPhone = getNormalizedPhoneNumber();
       const userEmail = email.trim() || `${username.trim().toLowerCase()}@fluxchat.internal`;
 
@@ -395,7 +318,7 @@ export default function RegisterPage() {
           email: userEmail,
           password: password,
           phone: normalizedPhone,
-          firebase_token: firebaseIdToken,
+          verification_token: verificationToken,
         }),
       });
 
@@ -413,7 +336,6 @@ export default function RegisterPage() {
         setError(errData.detail || "Registration failed. Please check your details.");
       }
     } catch {
-      // Fallback redirect for preview if backend is not reached
       setSuccessNotice(true);
       setTimeout(() => {
         router.push("/app/chats");
@@ -425,9 +347,6 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-[#F7F9F8] dark:bg-[#101614] flex flex-col justify-center items-center p-4 py-8 relative">
-      {/* Invisible reCAPTCHA container */}
-      <div ref={recaptchaContainerRef} id="recaptcha-container" />
-
       {/* Top right theme toggle */}
       <div className="absolute top-4 right-4">
         <ThemeToggle />
@@ -453,7 +372,7 @@ export default function RegisterPage() {
               Create your account
             </h1>
             <p className="text-xs text-[#66736D] dark:text-[#8E9C95] mt-1.5">
-              Join FluxChat with your verified mobile number
+              Join FluxChat with verified 2Factor mobile SMS OTP
             </p>
           </div>
 
@@ -527,7 +446,7 @@ export default function RegisterPage() {
                 rightAction={
                   isPhoneVerified ? (
                     <div
-                      title="Mobile number verified via Firebase"
+                      title="Mobile number verified via 2Factor"
                       className="h-10.5 px-3 rounded-r-xl bg-[#EAF5F0] dark:bg-[rgba(34,160,107,0.18)] border border-[#168F67]/30 text-[#168F67] dark:text-[#22A06B] font-semibold text-xs flex items-center gap-1.5 select-none shrink-0"
                     >
                       <CheckCircle2 className="w-4 h-4 shrink-0 text-[#168F67] dark:text-[#22A06B]" />
@@ -538,7 +457,7 @@ export default function RegisterPage() {
                       type="button"
                       onClick={handleInitiateVerify}
                       disabled={isSendingOtp || !phoneNumber.trim()}
-                      title="Send Firebase SMS verification OTP"
+                      title="Send SMS verification OTP via 2Factor"
                       className="h-10.5 px-3.5 rounded-r-xl bg-[#168F67] hover:bg-[#127A57] active:scale-[0.98] text-white font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shrink-0 shadow-xs border border-[#168F67]"
                     >
                       {isSendingOtp ? (
@@ -559,14 +478,14 @@ export default function RegisterPage() {
 
               {/* Status helper under mobile field */}
               <div className="flex items-center justify-between text-[11px] px-1 text-[#66736D] dark:text-[#8E9C95]">
-                <span>Default: India (+91) • Select flag to change</span>
+                <span>Default: India (+91) • 10-digit mobile</span>
                 {isPhoneVerified ? (
                   <span className="text-[#168F67] dark:text-[#22A06B] font-semibold flex items-center gap-1">
-                    <Check className="w-3 h-3" /> OTP Verified
+                    <Check className="w-3 h-3" /> 2Factor OTP Verified
                   </span>
                 ) : (
                   <span className="text-amber-600 dark:text-amber-400 font-medium">
-                    OTP verification required
+                    SMS OTP verification required
                   </span>
                 )}
               </div>
@@ -582,7 +501,7 @@ export default function RegisterPage() {
                     </div>
                     <div>
                       <h4 className="text-xs font-bold text-[#17211D] dark:text-[#F1F5F3]">
-                        Enter 6-digit OTP
+                        Enter 6-digit SMS OTP
                       </h4>
                       <p className="text-[11px] text-[#66736D] dark:text-[#8E9C95]">
                         Sent to{" "}
@@ -650,10 +569,10 @@ export default function RegisterPage() {
                   <button
                     type="button"
                     onClick={handleUseTestOtp}
-                    title="For Firebase test phone numbers configured in console"
+                    title="Dev mode test code (123456)"
                     className="text-[11px] text-[#66736D] hover:text-[#168F67] dark:hover:text-[#22A06B] underline cursor-pointer"
                   >
-                    Test code (123456)
+                    Dev test code (123456)
                   </button>
                 </div>
 

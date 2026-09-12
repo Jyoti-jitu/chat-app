@@ -14,11 +14,56 @@ from app.schemas.auth import (
     TokenRefreshResponse,
     UserResponse,
     LogoutResponse,
+    SendOtpRequest,
+    SendOtpResponse,
+    VerifyOtpRequest,
+    VerifyOtpResponse,
+    LoginOtpRequest,
 )
 from app.services.auth_service import auth_service
 
 router = APIRouter(prefix="", tags=["Authentication"])
 security = HTTPBearer(auto_error=False)
+
+
+@router.post(
+    "/send-otp",
+    response_model=SendOtpResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Send SMS OTP via 2Factor",
+    description="Dispatches a 6-digit SMS verification OTP to an Indian mobile number using 2Factor API.",
+)
+async def send_otp(payload: SendOtpRequest) -> SendOtpResponse:
+    """Sends OTP via 2Factor API."""
+    return await auth_service.send_otp(phone=payload.phone, purpose=payload.purpose)
+
+
+@router.post(
+    "/verify-otp",
+    response_model=VerifyOtpResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Verify SMS OTP via 2Factor",
+    description="Verifies the OTP against 2Factor API and returns a signed verification token.",
+)
+async def verify_otp(payload: VerifyOtpRequest) -> VerifyOtpResponse:
+    """Verifies OTP via 2Factor API."""
+    return await auth_service.verify_otp(
+        session_id=payload.session_id, otp=payload.otp, phone=payload.phone
+    )
+
+
+@router.post(
+    "/login-otp",
+    response_model=TokenResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Login with Mobile OTP",
+    description="Authenticates a user via verified 2Factor SMS OTP and returns standard JWT tokens.",
+)
+async def login_with_otp(payload: LoginOtpRequest) -> TokenResponse:
+    """Logs user in using verified 2Factor OTP."""
+    return await auth_service.login_with_otp(
+        session_id=payload.session_id, otp=payload.otp, phone=payload.phone
+    )
 
 
 @router.post(

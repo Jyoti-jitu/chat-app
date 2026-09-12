@@ -19,7 +19,10 @@ from app.schemas.auth import (
     TokenRefreshResponse,
     UserResponse,
     LogoutResponse,
+    SendOtpResponse,
+    VerifyOtpResponse,
 )
+from app.services.two_factor_service import two_factor_service
 
 
 class AuthService:
@@ -31,6 +34,7 @@ class AuthService:
     async def register(self, request: UserRegisterRequest) -> TokenResponse:
         """
         Registers a new user after verifying unique email and username.
+        Validates optional phone ownership via verification token.
         Hashes password securely and generates initial token pair.
         """
         # Verify unique email
@@ -49,15 +53,25 @@ class AuthService:
                 detail="This username is already taken. Please choose another.",
             )
 
+        # If phone provided, verify uniqueness
+        if request.phone:
+            existing_phone = await self.repository.get_by_phone(request.phone)
+            if existing_phone:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="This mobile number is already registered with an existing account.",
+                )
+
         # Hash password securely
         password_hash = PasswordHasher.hash_password(request.password)
 
-        # Create user document
+        # Create user document with phone
         user_doc = UserModel.create_document(
             name=request.name,
             username=request.username,
             email=request.email,
             password_hash=password_hash,
+            phone=request.phone,
         )
 
         saved_user = await self.repository.create_user(user_doc)
@@ -74,6 +88,76 @@ class AuthService:
         refresh_token = JWTService.create_refresh_token(user_id=user_id)
 
         clean_user = UserModel.to_dict(saved_user)
+        user_response = UserResponse(**clean_user)
+
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="bearer",
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            user=user_response,
+        )
+
+    async def send_otp(self, phone: str, purpose: str = "register") -> SendOtpResponse:
+        """
+        Requests an SMS OTP via 2Factor API.
+        For login, verifies that the user exists first.
+        """
+        if purpose == "login":
+            clean_digits = two_factor_service.normalize_indian_phone(phone)
+            # Check user exists by phone or formatted phone
+            user = await self.repository.get_by_phone(f"+91{clean_digits}") or await self.repository.get_by_phone(clean_digits)
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="No account found with this mobile number. Please register first.",
+                )
+
+        result = await two_factor_service.send_otp(phone=phone, purpose=purpose)
+        return SendOtpResponse(**result)
+
+    async def verify_otp(self, session_id: str, otp: str, phone: str) -> VerifyOtpResponse:
+        """Verifies OTP entered by user via 2Factor REST API."""
+        result = await two_factor_service.verify_otp(session_id=session_id, otp=otp, phone=phone)
+        return VerifyOtpResponse(**result)
+
+    async def login_with_otp(self, session_id: str, otp: str, phone: str) -> TokenResponse:
+        """
+        Authenticates a user via 2Factor mobile OTP.
+        Returns standard JWT tokens upon successful OTP verification.
+        """
+        # Verify OTP first
+        await two_factor_service.verify_otp(session_id=session_id, otp=otp, phone=phone)
+        clean_digits = two_factor_service.normalize_indian_phone(phone)
+
+        # Lookup user by phone
+        user = await self.repository.get_by_phone(f"+91{clean_digits}") or await self.repository.get_by_phone(clean_digits)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No account associated with this verified mobile number.",
+            )
+
+        if not user.get("is_active", True):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is currently deactivated. Please contact support.",
+            )
+
+        user_id = str(user["_id"])
+        await self.repository.update_last_login(user_id)
+
+        logger.info(f"User '{user.get('username')}' logged in via 2Factor OTP.")
+
+        # Generate standard JWT token pair
+        access_token = JWTService.create_access_token(
+            user_id=user_id,
+            email=user["email"],
+            username=user["username"],
+        )
+        refresh_token = JWTService.create_refresh_token(user_id=user_id)
+
+        clean_user = UserModel.to_dict(user)
         user_response = UserResponse(**clean_user)
 
         return TokenResponse(

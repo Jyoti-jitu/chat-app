@@ -53,6 +53,11 @@ class AuthRepository:
             ]
         })
 
+    async def get_by_phone(self, phone: str) -> Optional[Dict[str, Any]]:
+        """Retrieves a user document by normalized phone number."""
+        clean = phone.strip()
+        return await self.users_collection.find_one({"phone": clean})
+
     async def update_last_login(self, user_id: str) -> None:
         """Updates the last_login timestamp for a user."""
         if not ObjectId.is_valid(user_id):

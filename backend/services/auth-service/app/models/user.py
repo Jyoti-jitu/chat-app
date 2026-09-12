@@ -16,6 +16,7 @@ class UserModel:
         username: str,
         email: str,
         password_hash: str,
+        phone: Optional[str] = None,
         avatar: Optional[str] = None,
         bio: Optional[str] = None,
     ) -> Dict[str, Any]:
@@ -26,6 +27,7 @@ class UserModel:
             "username": username.strip().lower(),
             "email": email.strip().lower(),
             "password_hash": password_hash,
+            "phone": phone.strip() if phone else None,
             "avatar": avatar or f"https://api.dicebear.com/7.x/avataaars/svg?seed={username.strip().lower()}",
             "bio": bio or "Hey there! I am using FluxChat.",
             "is_active": True,

@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
+    # 2Factor SMS OTP Configuration
+    TWO_FACTOR_API_KEY: str = ""
+    TWO_FACTOR_BASE_URL: str = "https://2factor.in/API/V1"
+    OTP_EXPIRE_MINUTES: int = 10
+    OTP_RESEND_COOLDOWN_SECONDS: int = 30
+    OTP_MAX_ATTEMPTS: int = 5
+
     CORS_ORIGINS: Union[List[str], str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",

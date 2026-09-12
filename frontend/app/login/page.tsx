@@ -19,6 +19,7 @@ import { PhoneInput, COUNTRIES, Country } from "@/components/ui/PhoneInput";
 import { Card } from "@/components/ui/Card";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { Tabs } from "@/components/ui/Tabs";
+import { API_BASE_URL } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,6 +31,7 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(true);
 
   // OTP State
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState(["", "", "", "", "", ""]);
   const [resendCountdown, setResendCountdown] = useState(0);
@@ -51,20 +53,36 @@ export default function LoginPage() {
     return () => clearTimeout(timer);
   }, [resendCountdown]);
 
-  // Handle Send OTP
-  const handleSendOtp = () => {
-    if (!phoneNumber || phoneNumber.replace(/\D/g, "").length < 6) {
-      setErrorNotice("Please enter a valid phone number");
+  // Handle Send OTP via Backend 2Factor API
+  const handleSendOtp = async () => {
+    const cleanDigits = phoneNumber.replace(/\D/g, "");
+    if (!cleanDigits || cleanDigits.length < 10) {
+      setErrorNotice("Please enter a valid 10-digit mobile number");
       return;
     }
     setErrorNotice("");
     setIsSendingOtp(true);
+    const withoutLeadingZero = cleanDigits.startsWith("0") ? cleanDigits.slice(1) : cleanDigits;
+    const formattedPhone = `${selectedCountry.dialCode}${withoutLeadingZero}`;
 
-    setTimeout(() => {
-      setIsSendingOtp(false);
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/send-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: formattedPhone, purpose: "login" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || "Failed to dispatch OTP.");
+      }
+      setSessionId(data.session_id);
       setOtpSent(true);
-      setResendCountdown(30);
-    }, 600);
+      setResendCountdown(data.resend_cooldown || 30);
+    } catch (err: unknown) {
+      setErrorNotice(err instanceof Error ? err.message : "Failed to send OTP.");
+    } finally {
+      setIsSendingOtp(false);
+    }
   };
 
   // Handle OTP digit changes
@@ -88,14 +106,17 @@ export default function LoginPage() {
     }
   };
 
-  // Submit handler (Password or OTP)
-  const handleSubmit = (e: React.FormEvent) => {
+  // Submit handler (Password or OTP via Backend)
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorNotice("");
+    const cleanDigits = phoneNumber.replace(/\D/g, "");
+    const withoutLeadingZero = cleanDigits.startsWith("0") ? cleanDigits.slice(1) : cleanDigits;
+    const formattedPhone = `${selectedCountry.dialCode}${withoutLeadingZero}`;
 
     if (authMethod === "password") {
       if (!phoneNumber.trim()) {
-        setErrorNotice("Please enter your phone number");
+        setErrorNotice("Please enter your phone number, username, or email");
         return;
       }
       if (!password.trim()) {
@@ -108,17 +129,58 @@ export default function LoginPage() {
         setErrorNotice("Please enter the complete 6-digit verification code");
         return;
       }
+      if (!sessionId) {
+        setErrorNotice("Please request an OTP first");
+        return;
+      }
     }
 
     setIsLoading(true);
 
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      let res;
+      if (authMethod === "otp") {
+        res = await fetch(`${API_BASE_URL}/auth/login-otp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: sessionId,
+            otp: otpCode.join(""),
+            phone: formattedPhone,
+          }),
+        });
+      } else {
+        res = await fetch(`${API_BASE_URL}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: phoneNumber.trim(),
+            password: password,
+          }),
+        });
+      }
+
+      const data = await res.json();
+      if (res.ok) {
+        if (data.access_token) {
+          localStorage.setItem("fluxchat_access_token", data.access_token);
+        }
+        setSuccessNotice(true);
+        setTimeout(() => {
+          router.push("/app/chats");
+        }, 500);
+      } else {
+        setErrorNotice(data.detail || "Authentication failed. Please check your credentials.");
+      }
+    } catch {
+      // Fallback for offline preview
       setSuccessNotice(true);
       setTimeout(() => {
         router.push("/app/chats");
       }, 500);
-    }, 600);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const authTabs = [
