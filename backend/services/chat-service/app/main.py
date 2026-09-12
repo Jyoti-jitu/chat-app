@@ -41,14 +41,38 @@ async def lifespan(app: FastAPI):
     logger.info("MongoDB connection closed gracefully.")
 
 
+CHAT_DESCRIPTION = """
+# 💬 FluxChat Conversation & Group Service
+
+The **Chat Service** manages direct 1:1 messaging channels, multi-participant group chats, member rosters, and inbox feeds.
+
+## Capabilities
+- **Direct 1:1 Chats**: Deterministic recipient deduplication ensuring unique channels per pair.
+- **Group Conversations**: Dynamic group naming, member additions, removals, and admin permissions.
+- **Inbox Feed Sorting**: Chronological feed ordering via Atlas compound index `{ members: 1, updated_at: -1 }`.
+"""
+
+CHAT_TAGS = [
+    {"name": "Conversations", "description": "1:1 direct conversations, group channels, and member management."},
+    {"name": "Health", "description": "Chat Service health check and Atlas database verification."},
+]
+
 app = FastAPI(
-    title=settings.APP_NAME,
-    description="Microservice managing 1:1 direct conversations and group channels for FluxChat.",
+    title="FluxChat Conversation & Group Service",
     version="1.0.0",
+    description=CHAT_DESCRIPTION,
+    openapi_tags=CHAT_TAGS,
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
     lifespan=lifespan,
+    contact={
+        "name": "FluxChat Engineering Team",
+        "url": "https://github.com/Jyoti-jitu/chat-app",
+    },
+    license_info={
+        "name": "MIT License",
+    },
 )
 
 register_exception_handlers(app)

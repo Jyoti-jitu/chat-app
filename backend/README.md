@@ -674,9 +674,15 @@ This document serves as the master engineering blueprint and step-by-step implem
 ---
 
 ### Phase 28 — OpenAPI & API Documentation
+- **Status**: ✅ **COMPLETED & VERIFIED**
+- **Objective**: Standardized, enriched, and aggregated OpenAPI 3.1 documentation across the microservices suite.
 - **Deliverables**:
-  - Interactive Swagger UI (`/docs`) and ReDoc (`/redoc`) configured on every service.
-  - Typed request bodies, response models, and status code descriptions.
+  - **Multi-Spec Swagger Explorer (`/docs`)**: Interactive Swagger UI on the API Gateway with a dropdown selector allowing developers to toggle between the Unified Gateway Ingress and any downstream microservice.
+  - **Dynamic Schema Aggregator**: [`services/api-gateway/app/api/v1/docs.py`](file:///Users/apple/Desktop/project/chat-app/backend/services/api-gateway/app/api/v1/docs.py) proxying downstream service OpenAPI specs.
+  - **ReDoc Technical Reference (`/redoc`)**: Standard ReDoc viewer deployed across all services.
+  - **Automated Schema Exporter**: [`backend/scripts/export_openapi.py`](file:///Users/apple/Desktop/project/chat-app/backend/scripts/export_openapi.py) extracting all 7 microservice specs into [`docs/openapi/`](file:///Users/apple/Desktop/project/chat-app/docs/openapi/) and generating [`fluxchat_unified.json`](file:///Users/apple/Desktop/project/chat-app/docs/openapi/fluxchat_unified.json) (62 total endpoints).
+  - **Standardized Error Responses**: Phase 21 error JSON envelopes (`ErrorResponse`) documented in OpenAPI components across all standard error codes.
+  - **Comprehensive Developer Guide**: [`docs/API_DOCUMENTATION.md`](file:///Users/apple/Desktop/project/chat-app/docs/API_DOCUMENTATION.md).
 
 ---
 
@@ -748,5 +754,6 @@ This document serves as the master engineering blueprint and step-by-step implem
 - **Phase 25 (Automated Test Suite & E2E Test Harness)**: ✅ **Completed & Verified** (Master test runner `run_all_tests.sh`, 50/50 tests passing in 95s, CI/CD pipeline).
 - **Phase 26 (Docker Containerization & Compose Orchestration)**: ✅ **Completed & Verified** (Multi-stage Dockerfiles for all 7 microservices, Redis, Next.js standalone frontend, compose orchestration).
 - **Phase 27 (Environment Configuration & 12-Factor Compliance)**: ✅ **Completed & Verified** (Root & service `.env.example` templates, `validator.py`, `verify_env.py` diagnostic tool, production checklist).
-- **Phase 28 (OpenAPI & API Documentation)**: ⏳ **Next in Queue**
+- **Phase 28 (OpenAPI & API Documentation)**: ✅ **Completed & Verified** (Multi-spec Swagger portal at `:8000/docs`, ReDoc, `export_openapi.py` with 62 endpoints, `API_DOCUMENTATION.md`).
+- **Phase 29 (Production Architecture & Scaling)**: ⏳ **Next in Queue**
 

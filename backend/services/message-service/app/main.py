@@ -45,14 +45,41 @@ async def lifespan(app: FastAPI):
     logger.info("MongoDB and Redis connections closed gracefully.")
 
 
+MESSAGE_DESCRIPTION = """
+# 📨 FluxChat Message Service
+
+The **Message Service** manages message persistence, cursor-based pagination, author-only editing, soft-deletion, pinned messages, and read receipts.
+
+## Capabilities
+- **Cursor Pagination**: Opaque Base64 tokens for deterministic bidirectional timeline scrolling.
+- **Message Reactions**: Idempotent emoji reactions with participant list and counts.
+- **Pinned Messages**: Pin/unpin up to 5 critical messages per conversation.
+- **Read Receipts**: Transition tracking (`sent` ➔ `delivered` ➔ `read`) with real-time sync.
+"""
+
+MESSAGE_TAGS = [
+    {"name": "Messages", "description": "Message sending, cursor pagination, edits, and soft-deletes."},
+    {"name": "Reactions", "description": "Emoji reactions, add/remove toggles, and aggregates."},
+    {"name": "Pins", "description": "Pinned message management per conversation."},
+    {"name": "Health", "description": "Message Service health check and Atlas database verification."},
+]
+
 app = FastAPI(
-    title=settings.APP_NAME,
-    description="Microservice managing message persistence, editing, soft deletion, and receipts for FluxChat.",
+    title="FluxChat Message Service",
     version="1.0.0",
+    description=MESSAGE_DESCRIPTION,
+    openapi_tags=MESSAGE_TAGS,
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
     lifespan=lifespan,
+    contact={
+        "name": "FluxChat Engineering Team",
+        "url": "https://github.com/Jyoti-jitu/chat-app",
+    },
+    license_info={
+        "name": "MIT License",
+    },
 )
 
 register_exception_handlers(app)

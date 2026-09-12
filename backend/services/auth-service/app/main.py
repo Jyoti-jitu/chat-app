@@ -42,14 +42,40 @@ async def lifespan(app: FastAPI):
     logger.info(f"Shutting down {settings.APP_NAME}...")
 
 
+AUTH_DESCRIPTION = """
+# 🔐 FluxChat Authentication & Identity Service
+
+The **Auth Service** manages user credentials, registration, session lifecycles, JWT token rotation, and 2Factor SMS OTP verification.
+
+## Capabilities
+- **Bcrypt Hashing**: 12-round salted password hashing with constant-time verification.
+- **JWT Cryptography**: HS256 access tokens (15-min TTL) and refresh tokens (30-day TTL) with revocation tracking.
+- **Two-Factor SMS OTP**: Integrated with 2Factor.in SMS gateway for telephone number verification and OTP login.
+- **Brute-Force Protection**: Redis-backed sliding-window rate limiting on `/login`, `/register`, and `/send-otp`.
+"""
+
+AUTH_TAGS = [
+    {"name": "Authentication", "description": "User registration, password login, logout, and token refresh."},
+    {"name": "Two-Factor OTP", "description": "SMS OTP dispatch and verification via 2Factor.in."},
+    {"name": "Health", "description": "Service lifecycle and database connectivity health checks."},
+]
+
 app = FastAPI(
-    title=settings.APP_NAME,
+    title="FluxChat Authentication Service",
     version="1.0.0",
-    description="Production-ready authentication & identity microservice for FluxChat.",
+    description=AUTH_DESCRIPTION,
+    openapi_tags=AUTH_TAGS,
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
     lifespan=lifespan,
+    contact={
+        "name": "FluxChat Engineering Team",
+        "url": "https://github.com/Jyoti-jitu/chat-app",
+    },
+    license_info={
+        "name": "MIT License",
+    },
 )
 
 register_exception_handlers(app)

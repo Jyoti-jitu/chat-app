@@ -23,4 +23,10 @@ __all__ = [
     "BadGatewayError",
     "ServiceUnavailableError",
     "register_exception_handlers",
+    "ErrorResponse",
+    "ErrorDetail",
+    "STANDARD_OPENAPI_RESPONSES",
 ]
+
+from .schemas import ErrorResponse, ErrorDetail, STANDARD_OPENAPI_RESPONSES
+

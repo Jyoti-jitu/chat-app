@@ -42,14 +42,40 @@ async def lifespan(app: FastAPI):
     logger.info("MongoDB connection closed gracefully.")
 
 
+USER_DESCRIPTION = """
+# 👤 FluxChat User & Contacts Service
+
+The **User Service** manages user profiles, public identity lookup, directory search, and bilateral contact requests.
+
+## Capabilities
+- **Profile Management**: Bio, display name, avatar, telephone number, and privacy preferences.
+- **Directory Search**: Fast indexed search across usernames, emails, and phone numbers.
+- **Contacts Handshake**: Bilateral connection requests (`pending`, `accepted`, `rejected`, `cancelled`).
+- **Roster Retrieval**: Bilateral friendship roster with reciprocal validation.
+"""
+
+USER_TAGS = [
+    {"name": "Users", "description": "User profile retrieval, updates, and public search."},
+    {"name": "Contacts", "description": "Connection requests, handshake acceptance/rejection, and roster."},
+    {"name": "Health", "description": "User Service health check and Atlas database verification."},
+]
+
 app = FastAPI(
-    title=settings.APP_NAME,
-    description="Microservice managing user profiles, discovery, and presence for FluxChat.",
+    title="FluxChat User & Contacts Service",
     version="1.0.0",
+    description=USER_DESCRIPTION,
+    openapi_tags=USER_TAGS,
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
     lifespan=lifespan,
+    contact={
+        "name": "FluxChat Engineering Team",
+        "url": "https://github.com/Jyoti-jitu/chat-app",
+    },
+    license_info={
+        "name": "MIT License",
+    },
 )
 
 register_exception_handlers(app)

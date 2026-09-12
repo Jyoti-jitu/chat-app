@@ -86,14 +86,41 @@ async def lifespan(app: FastAPI):
     logger.info("MongoDB and Redis connections closed gracefully.")
 
 
+WS_DESCRIPTION = """
+# ⚡ FluxChat WebSocket & Real-Time Event Service
+
+The **WebSocket Service** handles authenticated persistent bidirectional client connections, heartbeat pings/pongs, presence synchronization, and ephemeral typing indicators.
+
+## Framing Protocols & Events
+- **`connection.ack`**: Emitted upon successful handshake with current user ID and active online roster.
+- **`chat.message`**: Real-time dispatch of inbound messages to recipient sockets.
+- **`presence.status`**: Online, away, and offline transition broadcasts backed by Redis TTL.
+- **`typing.start` / `typing.stop`**: Ephemeral typing indicators with 5-second auto-expiry.
+"""
+
+WS_TAGS = [
+    {"name": "WebSockets", "description": "Persistent bidirectional WebSocket framing and connection management."},
+    {"name": "Presence", "description": "User online/offline status query and manual presence updates."},
+    {"name": "Events", "description": "Internal Redis pub/sub event ingest and fanout."},
+    {"name": "Health", "description": "WebSocket Service health check and broker connectivity."},
+]
+
 app = FastAPI(
-    title=settings.APP_NAME,
-    description="Microservice managing real-time WebSocket connections, presence, typing indicators, and message broadcasts for FluxChat.",
+    title="FluxChat WebSocket & Real-Time Event Service",
     version="1.0.0",
+    description=WS_DESCRIPTION,
+    openapi_tags=WS_TAGS,
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
     lifespan=lifespan,
+    contact={
+        "name": "FluxChat Engineering Team",
+        "url": "https://github.com/Jyoti-jitu/chat-app",
+    },
+    license_info={
+        "name": "MIT License",
+    },
 )
 
 register_exception_handlers(app)

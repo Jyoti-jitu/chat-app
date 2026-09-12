@@ -45,14 +45,39 @@ async def lifespan(app: FastAPI):
     logger.info("MongoDB and Redis connections closed gracefully.")
 
 
+NOTIF_DESCRIPTION = """
+# 🔔 FluxChat Notification & Alerts Service
+
+The **Notification Service** provides persistent inbox storage, real-time alert dispatch, unread counters, and category-filtered notifications.
+
+## Capabilities
+- **Persistent Inbox**: Alerts for new messages, friendship requests, and group invites.
+- **Unread Counters**: Real-time aggregation of unread notifications for navigation badges.
+- **Bulk Operations**: Mark-as-read, read-all, and dismiss-all lifecycles.
+- **Real-Time Integration**: Emits `notification.new` events via Redis Pub/Sub directly to client sockets.
+"""
+
+NOTIF_TAGS = [
+    {"name": "Notifications", "description": "Inbox retrieval, mark as read, unread counts, and deletion."},
+    {"name": "Health", "description": "Notification Service health check and Atlas database verification."},
+]
+
 app = FastAPI(
-    title=settings.APP_NAME,
-    description="Microservice managing persistent user notifications, alerts, and unread badges for FluxChat.",
+    title="FluxChat Notification & Alerts Service",
     version="1.0.0",
+    description=NOTIF_DESCRIPTION,
+    openapi_tags=NOTIF_TAGS,
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
     lifespan=lifespan,
+    contact={
+        "name": "FluxChat Engineering Team",
+        "url": "https://github.com/Jyoti-jitu/chat-app",
+    },
+    license_info={
+        "name": "MIT License",
+    },
 )
 
 register_exception_handlers(app)

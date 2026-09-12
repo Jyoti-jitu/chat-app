@@ -7,11 +7,14 @@ from starlette.requests import Request
 from app.core.config import settings
 from app.services.http_proxy import proxy_request
 from app.api.v1.health import router as health_router
+from app.api.v1.docs import docs_router
 
 api_router = APIRouter()
 
-# Attach health routes
+# Attach health and documentation routes
 api_router.include_router(health_router, tags=["health"])
+api_router.include_router(docs_router)
+
 
 METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
 

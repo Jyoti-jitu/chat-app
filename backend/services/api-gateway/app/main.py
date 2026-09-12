@@ -33,11 +33,66 @@ async def lifespan(app: FastAPI):
     await close_http_client()
 
 
+GATEWAY_DESCRIPTION = """
+# 🚀 FluxChat Enterprise API Gateway
+
+The **FluxChat API Gateway** acts as the single unified ingress point for the entire FluxChat microservice cluster.
+
+## Architecture Overview
+- **Reverse Proxy**: Routes `/api/v1/*` to individual microservices with transparent distributed tracing (`X-Request-ID`).
+- **WebSocket Tunnel**: Upgrades and tunnels real-time socket connections on `/ws` to the WebSocket Service (`:8005`).
+- **Sliding-Window Rate Limiting**: Enforces client-specific rate limits with standard RFC quota headers.
+- **Cluster Health Aggregator**: Probes downstream service health concurrently on `/health`.
+
+## Microservices Ingress Matrix
+| Prefix | Downstream Target | Description |
+|---|---|---|
+| `/api/v1/auth` | **Auth Service** (`:8001`) | User registration, login, JWT issuance, 2Factor SMS OTP |
+| `/api/v1/users` | **User Service** (`:8002`) | User profiles, directory search, account settings |
+| `/api/v1/contacts` | **User Service** (`:8002`) | Bilateral contact requests, accept/reject, roster query |
+| `/api/v1/conversations` | **Chat Service** (`:8003`) | 1:1 direct chats and group channels |
+| `/api/v1/messages` | **Message Service** (`:8004`) | Messages, replies, cursor pagination, reactions |
+| `/ws` & `/api/v1/ws` | **WebSocket Service** (`:8005`) | Real-time message events, presence, typing indicators |
+| `/api/v1/notifications`| **Notification Service** (`:8006`)| Alert inbox, category filters, unread counters |
+
+## Interactive Documentation Explorer
+Use the dropdown selector at the top right to switch between the **Unified Gateway Ingress** and any downstream microservice specification.
+"""
+
+TAGS_METADATA = [
+    {"name": "health", "description": "Composite cluster health monitoring and downstream latency tracking."},
+    {"name": "API Documentation", "description": "Downstream microservice OpenAPI schemas and specifications."},
+    {"name": "auth", "description": "Authentication, JWT tokens, and 2Factor SMS endpoints."},
+    {"name": "users", "description": "User profile retrieval, account settings, and directory search."},
+    {"name": "contacts", "description": "Contact requests, bilateral friendship management, and roster."},
+    {"name": "conversations", "description": "Direct 1:1 messaging channels and group conversations."},
+    {"name": "messages", "description": "Message dispatch, edit, soft-delete, and cursor pagination."},
+    {"name": "notifications", "description": "Persistent notification center and unread alerts."},
+    {"name": "presence", "description": "Real-time user online/offline/away status tracking."},
+]
+
 app = FastAPI(
-    title=settings.SERVICE_NAME,
+    title="FluxChat Enterprise API Gateway",
     version=settings.VERSION,
-    description="Central API Gateway, reverse proxy, and WebSocket tunnel for FluxChat microservices.",
+    description=GATEWAY_DESCRIPTION,
     lifespan=lifespan,
+    openapi_tags=TAGS_METADATA,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    swagger_ui_parameters={
+        "urls": [
+            {"name": "Unified Gateway Ingress", "url": "/openapi.json"},
+            {"name": "Auth Service (:8001)", "url": "/api/v1/docs/auth-service/openapi.json"},
+            {"name": "User Service (:8002)", "url": "/api/v1/docs/user-service/openapi.json"},
+            {"name": "Chat Service (:8003)", "url": "/api/v1/docs/chat-service/openapi.json"},
+            {"name": "Message Service (:8004)", "url": "/api/v1/docs/message-service/openapi.json"},
+            {"name": "WebSocket Service (:8005)", "url": "/api/v1/docs/websocket-service/openapi.json"},
+            {"name": "Notification Service (:8006)", "url": "/api/v1/docs/notification-service/openapi.json"},
+        ],
+        "persistAuthorization": True,
+        "displayRequestDuration": True,
+        "filter": True,
+    },
 )
 
 register_exception_handlers(app)
