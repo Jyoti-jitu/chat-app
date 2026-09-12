@@ -37,16 +37,23 @@ export function ConversationItem({
       {/* Content */}
       <div className="flex-1 min-w-0 text-left">
         <div className="flex items-center justify-between mb-0.5">
-          <span
-            className={cn(
-              "text-xs font-bold truncate",
-              isActive
-                ? "text-[#168F67] dark:text-[#22A06B]"
-                : "text-[#17211D] dark:text-[#F1F5F3]"
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span
+              className={cn(
+                "text-xs font-bold truncate",
+                isActive
+                  ? "text-[#168F67] dark:text-[#22A06B]"
+                  : "text-[#17211D] dark:text-[#F1F5F3]"
+              )}
+            >
+              {conversation.name}
+            </span>
+            {conversation.section === "general" && (
+              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
+                General
+              </span>
             )}
-          >
-            {conversation.name}
-          </span>
+          </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {onDelete && (
               <button

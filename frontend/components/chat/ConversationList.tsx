@@ -27,6 +27,8 @@ export function ConversationList({ activeId, className }: ConversationListProps)
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [contacts, setContacts] = useState<ContactItem[]>([]);
+  const [activeSection, setActiveSection] = useState<"primary" | "general">("primary");
+  const [currentUserId, setCurrentUserId] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
@@ -50,26 +52,68 @@ export function ConversationList({ activeId, className }: ConversationListProps)
 
     try {
       setIsLoading(true);
-      const res = await getConversations(50, 0, token);
+
+      // Extract current user ID from token
+      let myUserId = currentUserId;
+      try {
+        const parts = token.split(".");
+        if (parts.length === 3) {
+          const payload = JSON.parse(atob(parts[1]));
+          if (payload.sub) {
+            myUserId = payload.sub;
+            setCurrentUserId(payload.sub);
+          }
+        }
+      } catch {}
+
+      // Parallel fetch: conversations and confirmed contacts
+      const [res, contactsRes] = await Promise.all([
+        getConversations(50, 0, token).catch(() => ({ items: [] })),
+        getContacts(token).catch(() => ({ items: [] })),
+      ]);
+
+      const contactItems = contactsRes.items || [];
+      setContacts(contactItems);
+      const confirmedContactIds = new Set(contactItems.map((c) => c.contact_id));
+
       if (res.items && res.items.length > 0) {
-        const mapped: Conversation[] = res.items.map((item) => ({
-          id: item.id,
-          type: item.type,
-          name: item.name || (item.type === "group" ? "Group Chat" : "Direct Chat"),
-          avatar: item.avatar || undefined,
-          members: item.member_ids,
-          lastMessage: item.last_message?.content || "No messages yet",
-          lastMessageTime: item.last_message?.timestamp
-            ? new Date(item.last_message.timestamp).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : item.updated_at
-            ? new Date(item.updated_at).toLocaleDateString()
-            : undefined,
-          unreadCount: item.unread_count || 0,
-          isOnline: item.members.some((m) => m.is_online),
-        }));
+        const mapped: Conversation[] = res.items.map((item) => {
+          const otherMember =
+            item.members?.find((m) => m.id !== myUserId) ||
+            item.member_ids?.find((id) => id !== myUserId);
+          const otherUserId =
+            typeof otherMember === "string" ? otherMember : otherMember?.id;
+
+          // Section classification:
+          // Direct chats with confirmed contacts -> "primary"
+          // Direct chats with unconfirmed / pending connections -> "general"
+          // Group chats -> "primary"
+          const isDirect = item.type === "direct";
+          const isConfirmed = Boolean(otherUserId && confirmedContactIds.has(otherUserId));
+          const section: "primary" | "general" =
+            isDirect && !isConfirmed ? "general" : "primary";
+
+          return {
+            id: item.id,
+            type: item.type,
+            name: item.name || (item.type === "group" ? "Group Chat" : "Direct Chat"),
+            avatar: item.avatar || undefined,
+            members: item.member_ids,
+            otherUserId: otherUserId,
+            section: section,
+            lastMessage: item.last_message?.content || "No messages yet",
+            lastMessageTime: item.last_message?.timestamp
+              ? new Date(item.last_message.timestamp).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : item.updated_at
+              ? new Date(item.updated_at).toLocaleDateString()
+              : undefined,
+            unreadCount: item.unread_count || 0,
+            isOnline: item.members.some((m) => m.is_online),
+          };
+        });
         setConversations(mapped);
       } else {
         setConversations([]);
@@ -79,7 +123,7 @@ export function ConversationList({ activeId, className }: ConversationListProps)
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [currentUserId]);
 
   const fetchContactsList = useCallback(async () => {
     const token = getAuthToken();
@@ -97,6 +141,20 @@ export function ConversationList({ activeId, className }: ConversationListProps)
     fetchConversations();
     fetchContactsList();
   }, [fetchConversations, fetchContactsList]);
+
+  // Auto-switch to General section if active conversation is in General
+  useEffect(() => {
+    if (activeId && conversations.length > 0) {
+      const activeConv = conversations.find(
+        (c) =>
+          c.id === activeId ||
+          (c.otherUserId && activeId === `c_${c.otherUserId}`)
+      );
+      if (activeConv && activeConv.section) {
+        setActiveSection(activeConv.section);
+      }
+    }
+  }, [activeId, conversations]);
 
   const handleDeleteConversation = async (id: string) => {
     const token = getAuthToken();
@@ -170,14 +228,32 @@ export function ConversationList({ activeId, className }: ConversationListProps)
     );
   };
 
+  const primaryConversations = conversations.filter(
+    (c) => (c.section || "primary") === "primary"
+  );
+  const generalConversations = conversations.filter(
+    (c) => c.section === "general"
+  );
+
+  const primaryCount = primaryConversations.length;
+  const generalCount = generalConversations.length;
+
+  const activeSectionList =
+    activeSection === "primary" ? primaryConversations : generalConversations;
+
   const tabs = [
     { id: "all", label: "All" },
-    { id: "unread", label: "Unread", count: conversations.filter((c) => c.unreadCount > 0).length || undefined },
-    { id: "groups", label: "Groups" },
+    {
+      id: "unread",
+      label: "Unread",
+      count:
+        activeSectionList.filter((c) => c.unreadCount > 0).length || undefined,
+    },
+    ...(activeSection === "primary" ? [{ id: "groups", label: "Groups" }] : []),
     { id: "favorites", label: "Favorites" },
   ];
 
-  const filteredConversations = conversations.filter((conv) => {
+  const filteredConversations = activeSectionList.filter((conv) => {
     const matchesSearch =
       conv.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (conv.lastMessage && conv.lastMessage.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -213,8 +289,62 @@ export function ConversationList({ activeId, className }: ConversationListProps)
         </button>
       </div>
 
+      {/* Primary vs General Section Switcher */}
+      <div className="px-4 pt-3 pb-1">
+        <div className="flex items-center gap-1 p-1 bg-[#F4F6F5] dark:bg-[#1D2723] rounded-xl border border-[#E6EBE8] dark:border-[#212E29]">
+          <button
+            onClick={() => {
+              setActiveSection("primary");
+              setActiveTab("all");
+            }}
+            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeSection === "primary"
+                ? "bg-white dark:bg-[#151D1A] text-[#168F67] dark:text-[#22A06B] shadow-xs"
+                : "text-[#66736D] dark:text-[#8E9C95] hover:text-[#17211D] dark:hover:text-[#F1F5F3]"
+            }`}
+          >
+            <span>Primary</span>
+            {primaryCount > 0 && (
+              <span
+                className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                  activeSection === "primary"
+                    ? "bg-[var(--primary-light)] text-[var(--primary)]"
+                    : "bg-[#E6EBE8] dark:bg-[#212E29] text-[#66736D] dark:text-[#8E9C95]"
+                }`}
+              >
+                {primaryCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => {
+              setActiveSection("general");
+              setActiveTab("all");
+            }}
+            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeSection === "general"
+                ? "bg-white dark:bg-[#151D1A] text-amber-600 dark:text-amber-400 shadow-xs"
+                : "text-[#66736D] dark:text-[#8E9C95] hover:text-[#17211D] dark:hover:text-[#F1F5F3]"
+            }`}
+          >
+            <span>General</span>
+            {generalCount > 0 && (
+              <span
+                className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                  activeSection === "general"
+                    ? "bg-amber-500/20 text-amber-600 dark:text-amber-400"
+                    : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                }`}
+              >
+                {generalCount}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+
       {/* Search Bar */}
-      <div className="px-4 pt-3 pb-2">
+      <div className="px-4 pt-2 pb-2">
         <div className="relative flex items-center">
           <Search className="w-4 h-4 absolute left-3.5 text-[#66736D] dark:text-[#8E9C95] pointer-events-none" />
           <input
@@ -254,8 +384,17 @@ export function ConversationList({ activeId, className }: ConversationListProps)
             />
           ))
         ) : (
-          <div className="text-center py-12 px-4 text-xs text-[#66736D] dark:text-[#8E9C95]">
-            No conversations found.
+          <div className="text-center py-12 px-4 space-y-1.5">
+            <p className="text-xs font-semibold text-[#17211D] dark:text-[#F1F5F3]">
+              {activeSection === "general"
+                ? "No messages in General"
+                : "No conversations found"}
+            </p>
+            <p className="text-[11px] text-[#66736D] dark:text-[#8E9C95] max-w-xs mx-auto">
+              {activeSection === "general"
+                ? "When you message users with pending connection requests, they appear here until accepted."
+                : "Conversations with confirmed contacts and accepted friends appear here."}
+            </p>
           </div>
         )}
       </div>

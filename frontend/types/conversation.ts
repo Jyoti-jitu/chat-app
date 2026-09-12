@@ -10,4 +10,6 @@ export interface Conversation {
   isPinned?: boolean;
   isOnline?: boolean;
   category?: "all" | "unread" | "groups" | "favorites";
+  section?: "primary" | "general";
+  otherUserId?: string;
 }

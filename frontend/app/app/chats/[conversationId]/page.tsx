@@ -9,7 +9,15 @@ import { MessageInput } from "@/components/chat/MessageInput";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Message } from "@/types/message";
-import { Trash2, AlertTriangle, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  Trash2,
+  AlertTriangle,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  UserCheck,
+  Loader2,
+} from "lucide-react";
 import {
   getMessages,
   sendMessage,
@@ -23,6 +31,11 @@ import {
 } from "@/lib/api/chat";
 import { getUserPublicProfile } from "@/lib/api/user";
 import { getStoredToken } from "@/lib/api/auth";
+import {
+  getContacts,
+  getContactRequests,
+  acceptContactRequest,
+} from "@/lib/api/contact";
 import { wsClient } from "@/lib/api";
 
 export default function IndividualChatPage({
@@ -47,6 +60,11 @@ export default function IndividualChatPage({
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+
+  // General section & pending connection request state
+  const [isInGeneral, setIsInGeneral] = useState(false);
+  const [pendingReceivedRequestId, setPendingReceivedRequestId] = useState<string | null>(null);
+  const [isAcceptingInChat, setIsAcceptingInChat] = useState(false);
 
   // Deletion modals state
   const [isDeleteChatModalOpen, setIsDeleteChatModalOpen] = useState(false);
@@ -101,9 +119,12 @@ export default function IndividualChatPage({
     const token = getStoredToken();
     if (!token) return;
 
+    let otherUserId: string | null = null;
+
     // 1. Fetch conversation details
     if (conversationId.startsWith("c_")) {
       const recipientId = conversationId.replace(/^c_/, "");
+      otherUserId = recipientId;
       try {
         const publicProfile = await getUserPublicProfile(recipientId, token);
         setConversation({
@@ -118,6 +139,10 @@ export default function IndividualChatPage({
     } else {
       try {
         const convDetails = await getConversationDetails(conversationId, token);
+        if (convDetails.type === "direct") {
+          const other = convDetails.members.find((m) => m.id !== currentUserId);
+          if (other) otherUserId = other.id;
+        }
         setConversation({
           id: convDetails.id,
           name: convDetails.name || (convDetails.type === "group" ? "Group Chat" : "Direct Chat"),
@@ -127,6 +152,34 @@ export default function IndividualChatPage({
       } catch (err: any) {
         console.warn("Could not fetch conversation details:", err.message);
       }
+    }
+
+    // Determine if conversation is in General section (pending connection)
+    if (otherUserId) {
+      try {
+        const [contactsRes, requestsRes] = await Promise.all([
+          getContacts(token).catch(() => ({ items: [] })),
+          getContactRequests(token).catch(() => ({ received: [], sent: [] })),
+        ]);
+        const isConfirmed = (contactsRes.items || []).some(
+          (c) => c.contact_id === otherUserId
+        );
+        if (!isConfirmed) {
+          setIsInGeneral(true);
+          const received = (requestsRes.received || []).find(
+            (r) => r.sender_id === otherUserId
+          );
+          setPendingReceivedRequestId(received ? received.id : null);
+        } else {
+          setIsInGeneral(false);
+          setPendingReceivedRequestId(null);
+        }
+      } catch (err) {
+        console.warn("Could not check connection status for chat section:", err);
+      }
+    } else {
+      setIsInGeneral(false);
+      setPendingReceivedRequestId(null);
     }
 
     // 2. Fetch live messages
@@ -412,6 +465,25 @@ export default function IndividualChatPage({
     router.push("/app/chats");
   };
 
+  const handleAcceptInChat = async () => {
+    if (!pendingReceivedRequestId) return;
+    const token = getStoredToken();
+    if (!token) return;
+
+    try {
+      setIsAcceptingInChat(true);
+      await acceptContactRequest(pendingReceivedRequestId, token);
+      setIsInGeneral(false);
+      setPendingReceivedRequestId(null);
+      showToast("Connection accepted! Chat moved to Primary.", "success");
+      fetchThreadData();
+    } catch (err: any) {
+      showToast(err.message || "Failed to accept connection request", "error");
+    } finally {
+      setIsAcceptingInChat(false);
+    }
+  };
+
   return (
     <div className="flex h-full w-full overflow-hidden">
       {/* Left Conversation List (Hidden on mobile screen) */}
@@ -448,6 +520,45 @@ export default function IndividualChatPage({
           onClearMessages={() => setIsClearModalOpen(true)}
           onDeleteConversation={() => setIsDeleteChatModalOpen(true)}
         />
+
+        {/* General Section & Pending Connection Banner */}
+        {isInGeneral && (
+          <div className="animate-in fade-in border-b border-[#E6EBE8] dark:border-[#212E29]">
+            {pendingReceivedRequestId ? (
+              <div className="px-4 py-2.5 bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-between gap-3 text-xs text-emerald-800 dark:text-emerald-300">
+                <div className="flex items-center gap-2 min-w-0">
+                  <UserCheck className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  <span className="truncate">
+                    <strong>{conversation.name}</strong> sent you a connection request. Accept to move this chat to <strong>Primary</strong>.
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={handleAcceptInChat}
+                  disabled={isAcceptingInChat}
+                  leftIcon={
+                    isAcceptingInChat ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <UserCheck className="w-3.5 h-3.5" />
+                    )
+                  }
+                >
+                  Accept Request
+                </Button>
+              </div>
+            ) : (
+              <div className="px-4 py-2.5 bg-amber-50 dark:bg-amber-950/40 flex items-center justify-between text-xs text-amber-800 dark:text-amber-300">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <span>
+                    <strong>Connection Request Pending</strong> • This conversation is currently in your <strong>General</strong> section. Once accepted, it will automatically move to <strong>Primary</strong>.
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Message Thread Scroll Area */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-2">

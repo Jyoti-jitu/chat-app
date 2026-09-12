@@ -612,14 +612,21 @@ export default function ContactsPage() {
                               Accept Request
                             </Button>
                           ) : isPendingSent ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled
-                              leftIcon={<Clock className="w-3.5 h-3.5 text-amber-500" />}
-                            >
-                              Request Sent
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                Sent
+                              </span>
+                              <Link href={`/app/chats/c_${user.id}`}>
+                                <Button
+                                  variant="soft"
+                                  size="sm"
+                                  leftIcon={<MessageSquare className="w-3.5 h-3.5" />}
+                                >
+                                  Message
+                                </Button>
+                              </Link>
+                            </div>
                           ) : (
                             <Button
                               size="sm"
