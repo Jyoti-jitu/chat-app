@@ -1,0 +1,20 @@
+# Python cache & virtualenv
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+.DS_Store
+
+# Logs & temp
+*.log
+scratch/

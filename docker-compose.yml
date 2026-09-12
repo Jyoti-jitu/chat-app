@@ -1,0 +1,240 @@
+services:
+  # ============================================================================
+  # Redis - Cache, Presence Tracking, and Pub/Sub Event Bus
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: fluxchat-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - fluxchat-network
+
+  # ============================================================================
+  # Auth Service (Port 8001) - Authentication, JWT, 2Factor SMS OTP
+  # ============================================================================
+  auth-service:
+    build:
+      context: ./backend
+      dockerfile: services/auth-service/Dockerfile
+    container_name: fluxchat-auth-service
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001
+      - HOST=0.0.0.0
+      - APP_ENV=production
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-fluxchat_db}
+      - JWT_SECRET=${JWT_SECRET:-fluxchat-dev-secret-key-32-chars-minimum-replace-in-production}
+      - TWO_FACTOR_API_KEY=${TWO_FACTOR_API_KEY:-}
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - fluxchat-network
+
+  # ============================================================================
+  # User Service (Port 8002) - User Profiles, Directory Search, Contacts Roster
+  # ============================================================================
+  user-service:
+    build:
+      context: ./backend
+      dockerfile: services/user-service/Dockerfile
+    container_name: fluxchat-user-service
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    environment:
+      - PORT=8002
+      - HOST=0.0.0.0
+      - APP_ENV=production
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-fluxchat_db}
+      - JWT_SECRET=${JWT_SECRET:-fluxchat-dev-secret-key-32-chars-minimum-replace-in-production}
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - fluxchat-network
+
+  # ============================================================================
+  # Chat Service (Port 8003) - Conversations, Direct Chats, Groups, Members
+  # ============================================================================
+  chat-service:
+    build:
+      context: ./backend
+      dockerfile: services/chat-service/Dockerfile
+    container_name: fluxchat-chat-service
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    environment:
+      - PORT=8003
+      - HOST=0.0.0.0
+      - APP_ENV=production
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-fluxchat_db}
+      - JWT_SECRET=${JWT_SECRET:-fluxchat-dev-secret-key-32-chars-minimum-replace-in-production}
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - fluxchat-network
+
+  # ============================================================================
+  # Message Service (Port 8004) - Messages, Reactions, Pins, Cursor Pagination
+  # ============================================================================
+  message-service:
+    build:
+      context: ./backend
+      dockerfile: services/message-service/Dockerfile
+    container_name: fluxchat-message-service
+    restart: unless-stopped
+    ports:
+      - "8004:8004"
+    environment:
+      - PORT=8004
+      - HOST=0.0.0.0
+      - APP_ENV=production
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-fluxchat_db}
+      - JWT_SECRET=${JWT_SECRET:-fluxchat-dev-secret-key-32-chars-minimum-replace-in-production}
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - fluxchat-network
+
+  # ============================================================================
+  # WebSocket Service (Port 8005) - Real-time Sockets, Presence, Typing, Broadcasts
+  # ============================================================================
+  websocket-service:
+    build:
+      context: ./backend
+      dockerfile: services/websocket-service/Dockerfile
+    container_name: fluxchat-websocket-service
+    restart: unless-stopped
+    ports:
+      - "8005:8005"
+    environment:
+      - PORT=8005
+      - HOST=0.0.0.0
+      - APP_ENV=production
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-fluxchat_db}
+      - JWT_SECRET=${JWT_SECRET:-fluxchat-dev-secret-key-32-chars-minimum-replace-in-production}
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - fluxchat-network
+
+  # ============================================================================
+  # Notification Service (Port 8006) - Real-time Alerts, Persistent Inbox
+  # ============================================================================
+  notification-service:
+    build:
+      context: ./backend
+      dockerfile: services/notification-service/Dockerfile
+    container_name: fluxchat-notification-service
+    restart: unless-stopped
+    ports:
+      - "8006:8006"
+    environment:
+      - PORT=8006
+      - HOST=0.0.0.0
+      - APP_ENV=production
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-fluxchat_db}
+      - JWT_SECRET=${JWT_SECRET:-fluxchat-dev-secret-key-32-chars-minimum-replace-in-production}
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - fluxchat-network
+
+  # ============================================================================
+  # API Gateway (Port 8000) - Ingress Reverse Proxy & WebSocket Tunnel
+  # ============================================================================
+  api-gateway:
+    build:
+      context: ./backend
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: fluxchat-api-gateway
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - HOST=0.0.0.0
+      - ENVIRONMENT=production
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - USER_SERVICE_URL=http://user-service:8002
+      - CHAT_SERVICE_URL=http://chat-service:8003
+      - MESSAGE_SERVICE_URL=http://message-service:8004
+      - WS_SERVICE_URL=ws://websocket-service:8005
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8006
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000
+      - RATE_LIMIT_DEFAULT=120
+      - RATE_LIMIT_AUTH=25
+    depends_on:
+      - auth-service
+      - user-service
+      - chat-service
+      - message-service
+      - websocket-service
+      - notification-service
+    networks:
+      - fluxchat-network
+
+  # ============================================================================
+  # Next.js Frontend (Port 3000) - Production Standalone Web Application
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:8000
+        - NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws
+    container_name: fluxchat-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+    depends_on:
+      - api-gateway
+    networks:
+      - fluxchat-network
+
+# ==============================================================================
+# Networks & Persistent Volumes
+# ==============================================================================
+networks:
+  fluxchat-network:
+    name: fluxchat-network
+    driver: bridge
+
+volumes:
+  redis_data:
+    name: fluxchat-redis-data
