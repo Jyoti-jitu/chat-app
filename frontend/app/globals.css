@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
+
+:root, [data-theme="light"] {
+  --primary: #168F67;
+  --primary-hover: #127A57;
+  --primary-light: #EAF5F0;
+  --text-main: #17211D;
+  --text-muted: #66736D;
+  --bg-main: #FFFFFF;
+  --bg-secondary: #F7F9F8;
+  --border-color: #E6EBE8;
+  --success: #22A06B;
+  --bubble-sent: #DDF2E8;
+  --bubble-received: #F4F6F5;
+  --card-shadow: 0 2px 8px -2px rgba(23, 33, 29, 0.05), 0 1px 4px -1px rgba(23, 33, 29, 0.03);
+}
+
+.dark, [data-theme="dark"] {
+  --primary: #22A06B;
+  --primary-hover: #168F67;
+  --primary-light: rgba(34, 160, 107, 0.15);
+  --text-main: #F1F5F3;
+  --text-muted: #8E9C95;
+  --bg-main: #101614;
+  --bg-secondary: #151D1A;
+  --border-color: #212E29;
+  --success: #22A06B;
+  --bubble-sent: #17382B;
+  --bubble-received: #1B2622;
+  --card-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.3);
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom modern scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(102, 115, 109, 0.2);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 115, 109, 0.4);
+}
+
+/* Subtle shadows */
+.shadow-flux {
+  box-shadow: var(--card-shadow);
+}
+.shadow-flux-md {
+  box-shadow: 0 4px 20px -2px rgba(23, 33, 29, 0.06), 0 2px 6px -1px rgba(23, 33, 29, 0.03);
+}
+.shadow-flux-lg {
+  box-shadow: 0 12px 36px -4px rgba(23, 33, 29, 0.08), 0 4px 12px -2px rgba(23, 33, 29, 0.04);
+}
+
+/* Phone Mockup chassis */
+.phone-frame {
+  border: 8px solid #17211D;
+  border-radius: 44px;
+  box-shadow: 0 25px 60px -15px rgba(23, 33, 29, 0.25), 0 0 0 1px rgba(23, 33, 29, 0.1);
+}
