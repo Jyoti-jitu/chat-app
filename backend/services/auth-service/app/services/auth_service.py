@@ -3,7 +3,7 @@ Auth business logic layer.
 Orchestrates password hashing, token lifecycle, domain validation, and repository access.
 Contains no raw database queries.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 from fastapi import HTTPException, status
 from app.core.jwt import JWTService
@@ -257,8 +257,11 @@ class AuthService:
             )
 
         # Invalidate old refresh token (Token Rotation)
-        exp_timestamp = payload.get("exp", int(datetime.now(timezone.utc).timestamp()))
-        exp_dt = datetime.fromtimestamp(exp_timestamp, timezone.utc)
+        exp_timestamp = payload.get("exp")
+        if exp_timestamp:
+            exp_dt = datetime.fromtimestamp(exp_timestamp, timezone.utc)
+        else:
+            exp_dt = datetime.now(timezone.utc) + timedelta(days=3650)
         await self.repository.revoke_token(refresh_token_str, exp_dt)
 
         # Generate fresh token pair
@@ -282,12 +285,16 @@ class AuthService:
         """Revokes a given access or refresh token upon user logout."""
         try:
             payload = JWTService.decode_token(token_str)
-            exp_timestamp = payload.get("exp", int(datetime.now(timezone.utc).timestamp()))
-            exp_dt = datetime.fromtimestamp(exp_timestamp, timezone.utc)
+            exp_timestamp = payload.get("exp")
+            if exp_timestamp:
+                exp_dt = datetime.fromtimestamp(exp_timestamp, timezone.utc)
+            else:
+                exp_dt = datetime.now(timezone.utc) + timedelta(days=3650)
             await self.repository.revoke_token(token_str, exp_dt)
         except Exception:
-            # Even if token is already expired or malformed, proceed gracefully
-            pass
+            # Even if token decoding fails or is malformed, record revocation with 10-year expiry
+            exp_dt = datetime.now(timezone.utc) + timedelta(days=3650)
+            await self.repository.revoke_token(token_str, exp_dt)
 
         return LogoutResponse(status="ok", message="Successfully logged out.")
 

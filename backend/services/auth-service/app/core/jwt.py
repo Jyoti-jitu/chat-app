@@ -62,13 +62,15 @@ class JWTService:
     def decode_token(token: str) -> Dict[str, Any]:
         """
         Decodes and verifies a JWT token.
-        Raises HTTPException 401 if expired or invalid.
+        Tokens remain valid until revoked upon logout (verify_exp disabled).
+        Raises HTTPException 401 if invalid.
         """
         try:
             payload = jwt.decode(
                 token,
                 settings.JWT_SECRET,
                 algorithms=[settings.JWT_ALGORITHM],
+                options={"verify_exp": False},
             )
             return payload
         except jwt.ExpiredSignatureError:

@@ -46,6 +46,7 @@ async def authenticate_token(token: Optional[str]) -> Optional[Dict[str, Any]]:
             token,
             settings.JWT_SECRET,
             algorithms=[settings.JWT_ALGORITHM],
+            options={"verify_exp": False},
         )
     except Exception as e:
         logger.warning(f"WebSocket handshake token decode failed: {e}")

@@ -27,8 +27,8 @@ This document defines the configuration standards, security rules, and productio
 | `REDIS_URL` | string (URI) | `redis://redis:6379/0` | **Yes** | WebSocket, Notification, Auth, User, Chat, Message |
 | `JWT_SECRET` | string | *(Min 32 random characters)* | **Yes** | Auth, User, Chat, Message, WebSocket, Notification |
 | `JWT_ALGORITHM` | string | `HS256` | No | Auth, User, Chat, Message, WebSocket, Notification |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | int | `15` | No | Auth Service |
-| `REFRESH_TOKEN_EXPIRE_DAYS` | int | `30` | No | Auth Service |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | int | `5256000` (10 years; persistent until explicit logout) | No | Auth Service |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | int | `3650` (10 years) | No | Auth Service |
 | `TWO_FACTOR_API_KEY` | string | *(2Factor.in API Key)* | Optional | Auth Service (Falls back to sandbox OTP) |
 | `AUTH_SERVICE_URL` | string (URL) | `http://auth-service:8001` | **Yes** | API Gateway |
 | `USER_SERVICE_URL` | string (URL) | `http://user-service:8002` | **Yes** | API Gateway |

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { logout } from "@/lib/api/auth";
 import {
   MessageSquare,
   Users,
@@ -17,8 +18,18 @@ import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils/cn";
 
 export function AppSidebar() {
+  const router = useRouter();
   const pathname = usePathname();
   const [profile, setProfile] = useState<{ name: string; username: string; avatar?: string } | null>(null);
+
+  const handleSignOut = async () => {
+    try {
+      await logout();
+    } catch {
+      // ignore
+    }
+    router.push("/login");
+  };
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -164,20 +175,14 @@ export function AppSidebar() {
               </div>
             </div>
           </Link>
-          <Link
-            href="/login"
-            onClick={() => {
-              if (typeof window !== "undefined") {
-                localStorage.removeItem("fluxchat_access_token");
-                localStorage.removeItem("accessToken");
-                localStorage.removeItem("fluxchat_user");
-              }
-            }}
+          <button
+            type="button"
+            onClick={handleSignOut}
             title="Sign out"
             className="p-1.5 text-[#66736D] dark:text-[#8E9C95] hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
           >
             <LogOut className="w-4 h-4" />
-          </Link>
+          </button>
         </div>
       </div>
     </aside>

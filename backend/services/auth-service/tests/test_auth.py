@@ -48,6 +48,19 @@ async def test_jwt_service():
     assert r_payload["sub"] == user_id
     assert r_payload["type"] == "refresh"
 
+    # Verify access tokens do not expire even if timestamp has passed (persist until logout)
+    past_payload = {
+        "sub": user_id,
+        "email": email,
+        "username": username,
+        "type": "access",
+        "exp": int(time.time()) - 3600,
+    }
+    import jwt
+    past_token = jwt.encode(past_payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+    decoded_past = JWTService.decode_token(past_token)
+    assert decoded_past["sub"] == user_id
+
 
 @pytest.mark.asyncio
 async def test_auth_full_lifecycle():

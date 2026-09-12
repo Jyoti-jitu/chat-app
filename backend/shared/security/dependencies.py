@@ -54,6 +54,7 @@ async def get_current_user(
             raw_token,
             cfg["secret"],
             algorithms=[cfg["algorithm"]],
+            options={"verify_exp": False},
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(
