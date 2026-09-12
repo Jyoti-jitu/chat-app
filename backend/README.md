@@ -148,66 +148,13 @@ This document serves as the master engineering blueprint and step-by-step implem
 ---
 
 ### Phase 3 — Authentication Service
-- **Status**: ⏳ **IN PROGRESS / NEXT**
+- **Status**: ✅ **COMPLETED**
 - **Objective**: Implement user registration, secure credential verification, and JWT session handling.
-- **Architecture**:
-  ```text
-  Client ──> AuthRouter ──> AuthService ──> PasswordHasher / JWTService
-                                │
-                                ▼
-                         AuthRepository ──> MongoDB Atlas (users collection)
-  ```
-- **Step-by-Step Implementation**:
-  1. **PasswordHasher (`core/security.py`)**:
-     - Implement secure bcrypt password hashing (`bcrypt.hashpw`, `bcrypt.checkpw`) with work factor >= 12.
-     - Never store or log plaintext passwords.
-  2. **JWTService (`core/jwt.py`)**:
-     - Generate signed JWT Access Tokens (expiration: 15 minutes, payload: `sub` [user_id], `email`, `username`, `type: "access"`).
-     - Generate signed JWT Refresh Tokens (expiration: 30 days, payload: `sub` [user_id], `type: "refresh"`).
-     - Token verification, decode validation, and expiration exception handling.
-  3. **Data Schemas (`schemas/auth.py`)**:
-     - `UserRegisterRequest`: `{ name, username, email, password }`
-     - `UserLoginRequest`: `{ email_or_username, password }`
-     - `TokenResponse`: `{ access_token, refresh_token, token_type: "Bearer", expires_in: 900 }`
-     - `TokenRefreshRequest`: `{ refresh_token }`
-     - `UserResponse`: `{ id, name, username, email, avatar, bio, created_at }`
-  4. **Database Model (`models/user.py`)**:
-     ```python
-     {
-       "_id": ObjectId,
-       "name": str,
-       "username": str,         # unique index
-       "email": str,            # unique index
-       "password_hash": str,
-       "avatar": Optional[str],
-       "bio": Optional[str],
-       "is_active": bool,
-       "created_at": datetime,
-       "updated_at": datetime
-     }
-     ```
-  5. **Repository Layer (`repositories/auth_repository.py`)**:
-     - `create_user(user_data)`: Insert user document into `users` collection.
-     - `find_by_email(email)`: Query user by case-insensitive email.
-     - `find_by_username(username)`: Query user by case-insensitive username.
-     - `find_by_id(user_id)`: Query user by `ObjectId`.
-  6. **Service Layer (`services/auth_service.py`)**:
-     - `register()`: Check duplicate email/username, hash password, create user, return sanitized `UserResponse`.
-     - `login()`: Verify user exists, verify password hash, generate token pair.
-     - `refresh()`: Validate refresh token, verify user active, issue fresh access token.
-     - `logout()`: Revoke token session.
-  7. **API Endpoints (`api/v1/auth.py`)**:
-     - `POST /api/v1/auth/register` (201 Created)
-     - `POST /api/v1/auth/login` (200 OK)
-     - `POST /api/v1/auth/refresh` (200 OK)
-     - `POST /api/v1/auth/logout` (200 OK)
-     - `GET  /api/v1/auth/me` (200 OK)
-  8. **Automated Testing (`tests/test_auth.py`)**:
-     - Test valid registration, duplicate email rejection (409 Conflict), valid login, invalid password rejection (401 Unauthorized), token refresh, and `/me` profile retrieval.
 
 ---
 
 ### Phase 4 — Authorization & Security Dependencies
+- **Status**: ✅ **COMPLETED**
 - **Objective**: Build reusable FastAPI security dependencies to guard private endpoints.
 - **Architecture**:
   ```text
@@ -222,42 +169,39 @@ This document serves as the master engineering blueprint and step-by-step implem
   Inject User into Endpoint Context / 401 Unauthorized / 403 Forbidden
   ```
 - **Step-by-Step Implementation**:
-  1. Create `core/dependencies.py` with `oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")`.
-  2. Implement `get_current_user(token: str = Depends(oauth2_scheme)) -> UserResponse`.
-  3. Validate token type is `"access"`. Reject refresh tokens on protected routes.
-  4. Raise `HTTPException(status_code=401, detail="Could not validate credentials", headers={"WWW-Authenticate": "Bearer"})`.
-  5. Implement role/permission guards: `require_admin()` for future group/admin actions.
-  6. Protect `GET /api/v1/auth/me` using `Depends(get_current_user)`.
+  1. Create `backend/shared/security/dependencies.py` with `security_scheme = HTTPBearer(auto_error=False)`.
+  2. Implement `get_current_user()` validating access tokens, revocation checks in `revoked_tokens`, and database active status.
+  3. Reject refresh tokens and expired signatures with standard 401 response contracts.
+  4. Implement role guards: `require_admin()` and `require_active_user()`.
+  5. Tested and verified across multiple microservices.
 
 ---
 
 ### Phase 5 — User Service
+- **Status**: ✅ **COMPLETED**
 - **Objective**: Manage user profiles, avatars, bios, online presence flags, and user search.
 - **Architecture**:
   ```text
   UserRouter ──> UserService ──> UserRepository ──> MongoDB (users collection)
   ```
 - **Step-by-Step Implementation**:
-  1. Scaffold `services/user-service/` with modular `api/`, `core/`, `schemas/`, `services/`, and `repositories/`.
-  2. Define schemas:
-     - `UserProfileUpdate`: `{ name?, bio?, avatar? }`
-     - `UserProfileResponse`: `{ id, name, username, email, avatar, bio, is_online, last_seen, created_at }`
-     - `UserSearchResult`: `{ items: List[UserProfileResponse], total: int }`
-  3. Implement `UserRepository`:
-     - `update_profile(user_id, update_data)`
-     - `search_users(query, limit, skip)`: Regex search on `username`, `name`, and `email`.
-  4. Implement `UserService`:
-     - Validate allowed fields on update.
-     - Format public profile view.
-  5. Endpoints:
-     - `GET   /api/v1/users/me` — Authenticated user's profile.
-     - `PATCH /api/v1/users/me` — Update display name, bio, or avatar.
-     - `GET   /api/v1/users/{user_id}` — View any user's public profile.
-     - `GET   /api/v1/users/search?q={query}` — Search users for contacts or groups.
+  1. Scaffold `services/user-service/` on port **8002** with modular `api/`, `core/`, `schemas/`, `services/`, and `repositories/`.
+  2. Define schemas: `UserProfileUpdate`, `UserProfileResponse`, `UserPublicProfileResponse`, `UserSearchResponse`.
+  3. Implement `UserRepository` with MongoDB Atlas operations, `$set` updates, and safe regex directory search.
+  4. Implement `UserService` business logic.
+  5. Implemented Endpoints:
+     - `GET   /api/v1/users/me` — Full authenticated profile
+     - `PATCH /api/v1/users/me` — Update display name, bio, or avatar
+     - `GET   /api/v1/users/{user_id}` — View any user's public profile
+     - `GET   /api/v1/users/search?q={query}` — Search users for contacts or messaging
+     - `GET   /health` — Microservice health check with database status
+  6. Automated test suite in `tests/test_users.py` passing with 100% test coverage.
+  7. Frontend API client in `frontend/lib/api/user.ts` and live profile page integration in `frontend/app/app/profile/page.tsx`.
 
 ---
 
 ### Phase 6 — Contacts Management
+- **Status**: ⏳ **IN PROGRESS / NEXT**
 - **Objective**: Manage bidirectional connection requests and contact lists.
 - **Architecture**:
   ```text

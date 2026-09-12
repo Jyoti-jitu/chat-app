@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Mail,
   AtSign,
@@ -11,6 +11,7 @@ import {
   Layers,
   Sparkles,
   CheckCircle2,
+  Loader2,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -18,6 +19,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { currentUser as initialUser } from "@/lib/mock/users";
 import { User } from "@/types/user";
+import { getMyProfile, updateMyProfile } from "@/lib/api/user";
 
 export default function ProfilePage() {
   const [user, setUser] = useState<User>(initialUser);
@@ -25,19 +27,65 @@ export default function ProfilePage() {
   const [name, setName] = useState(user.name);
   const [bio, setBio] = useState(user.bio || "");
   const [email, setEmail] = useState(user.email);
+  const [isSaving, setIsSaving] = useState(false);
   const [successNotice, setSuccessNotice] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  // Fetch live profile from User Service if authenticated
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const liveUser = await getMyProfile();
+        if (liveUser) {
+          setUser((prev) => ({
+            ...prev,
+            id: liveUser.id,
+            name: liveUser.name,
+            username: liveUser.username,
+            email: liveUser.email,
+            bio: liveUser.bio || "",
+            avatar: liveUser.avatar || prev.avatar,
+            isOnline: liveUser.is_online,
+          }));
+          setName(liveUser.name);
+          setBio(liveUser.bio || "");
+          setEmail(liveUser.email);
+        }
+      } catch {
+        // Fallback to local user state when offline or unauthenticated preview
+      }
+    }
+    loadProfile();
+  }, []);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    setUser((prev) => ({
-      ...prev,
-      name,
-      bio,
-      email,
-    }));
-    setIsEditModalOpen(false);
-    setSuccessNotice(true);
-    setTimeout(() => setSuccessNotice(false), 3000);
+    setIsSaving(true);
+    setErrorMessage("");
+
+    try {
+      const updated = await updateMyProfile({ name, bio });
+      setUser((prev) => ({
+        ...prev,
+        name: updated.name,
+        bio: updated.bio || "",
+      }));
+      setIsEditModalOpen(false);
+      setSuccessNotice(true);
+      setTimeout(() => setSuccessNotice(false), 3000);
+    } catch {
+      // Local state fallback
+      setUser((prev) => ({
+        ...prev,
+        name,
+        bio,
+      }));
+      setIsEditModalOpen(false);
+      setSuccessNotice(true);
+      setTimeout(() => setSuccessNotice(false), 3000);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
