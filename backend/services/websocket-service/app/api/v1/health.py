@@ -1,13 +1,70 @@
 """
 Health check endpoints for WebSocket Service.
 """
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Response, status
 from app.core.config import settings
 from app.core.connection_manager import connection_manager
 from app.schemas.health import HealthResponse
 from shared.database.mongodb import db_manager
+from shared.redis.client import redis_manager
+from shared.health.schemas import LivenessResponse, ReadinessResponse
+from shared.health.probes import get_uptime_seconds
 
 router = APIRouter(tags=["Health"])
+
+
+@router.get(
+    "/health/live",
+    response_model=LivenessResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Kubernetes Liveness Probe",
+    description="Validates that the WebSocket process is running and the event loop is responsive.",
+)
+async def liveness_probe() -> LivenessResponse:
+    return LivenessResponse(
+        status="ok",
+        service=settings.APP_NAME,
+        uptime_seconds=get_uptime_seconds(),
+    )
+
+
+@router.get(
+    "/health/ready",
+    response_model=ReadinessResponse,
+    responses={
+        200: {"description": "Service is ready to accept WebSocket and HTTP connections"},
+        503: {"description": "MongoDB or Redis backing service unavailable"},
+    },
+    summary="Kubernetes Readiness Probe",
+    description="Validates MongoDB and Redis Pub/Sub connectivity before routing traffic.",
+)
+async def readiness_probe(response: Response) -> ReadinessResponse:
+    is_db_connected = await db_manager.is_connected()
+    is_redis_connected = await redis_manager.is_connected()
+
+    all_ready = is_db_connected and is_redis_connected
+    if not all_ready:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        errors = []
+        if not is_db_connected:
+            errors.append("MongoDB Atlas unavailable")
+        if not is_redis_connected:
+            errors.append("Redis unavailable")
+
+        return ReadinessResponse(
+            status="unready",
+            service=settings.APP_NAME,
+            database="connected" if is_db_connected else "disconnected",
+            redis="connected" if is_redis_connected else "disconnected",
+            error="; ".join(errors),
+        )
+
+    return ReadinessResponse(
+        status="ok",
+        service=settings.APP_NAME,
+        database="connected",
+        redis="connected",
+    )
 
 
 @router.get(
@@ -41,3 +98,4 @@ async def health_check() -> HealthResponse:
         active_connections=connection_manager.get_connection_count(),
         error=db_error,
     )
+

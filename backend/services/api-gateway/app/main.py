@@ -17,7 +17,7 @@ from app.core.rate_limiter import rate_limiter
 from app.services.http_proxy import get_http_client, close_http_client
 from app.services.ws_proxy import proxy_websocket
 from app.api.v1.router import api_router
-from app.api.v1.health import cluster_health
+from app.api.v1.health import cluster_health, gateway_liveness, gateway_readiness
 from shared.errors.handlers import register_exception_handlers
 
 
@@ -112,7 +112,16 @@ class GatewayMiddleware(BaseHTTPMiddleware):
 
         # Bypass rate limit on health checks
         path = request.url.path
-        if path in ("/health", "/api/v1/health", "/docs", "/openapi.json"):
+        if path in (
+            "/health",
+            "/health/live",
+            "/health/ready",
+            "/api/v1/health",
+            "/api/v1/health/live",
+            "/api/v1/health/ready",
+            "/docs",
+            "/openapi.json",
+        ):
             response = await call_next(request)
             response.headers["x-request-id"] = req_id
             return response
@@ -151,22 +160,22 @@ class GatewayMiddleware(BaseHTTPMiddleware):
                             "message": f"Rate limit exceeded. Please try again in {reset_sec} seconds.",
                             "request_id": req_id,
                             "timestamp": datetime.now(timezone.utc).isoformat(),
-                        }
+                        },
+                        "detail": f"Rate limit exceeded. Please try again in {reset_sec} seconds.",
                     },
                 )
         else:
             limit_val, remaining, reset_sec = limit, limit, 60
 
-        # Execute downstream
         response = await call_next(request)
 
-        # Inject telemetry headers
+        # Propagate request ID & Rate Limit headers
         response.headers["x-request-id"] = req_id
-        response.headers["x-ratelimit-limit"] = str(limit_val)
-        response.headers["x-ratelimit-remaining"] = str(remaining)
-        response.headers["x-ratelimit-reset"] = str(reset_sec)
+        if settings.RATE_LIMIT_ENABLED:
+            response.headers["x-ratelimit-limit"] = str(limit_val)
+            response.headers["x-ratelimit-remaining"] = str(remaining)
+            response.headers["x-ratelimit-reset"] = str(reset_sec)
 
-        # Access log
         duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
         logger.info(
             f"{request.method} {path} -> {response.status_code} ({duration_ms}ms) [req_id={req_id}, ip={client_ip}]"
@@ -187,10 +196,20 @@ app.add_middleware(
     expose_headers=["x-request-id", "x-ratelimit-limit", "x-ratelimit-remaining", "x-ratelimit-reset"],
 )
 
-# Root Health Endpoints
-@app.get("/health", tags=["health"])
+# Root Health & Probe Endpoints
+@app.get("/health", tags=["Health"])
 async def root_health():
     return await cluster_health()
+
+
+@app.get("/health/live", tags=["Health"])
+async def root_liveness():
+    return await gateway_liveness()
+
+
+@app.get("/health/ready", tags=["Health"])
+async def root_readiness():
+    return await gateway_readiness()
 
 
 # WebSocket Tunnel Endpoints

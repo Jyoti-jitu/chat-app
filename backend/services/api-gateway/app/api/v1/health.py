@@ -46,7 +46,28 @@ async def check_service(name: str, url: str) -> Dict[str, Any]:
         }
 
 
-@router.get("/health")
+@router.get("/health/live", summary="Gateway Liveness Probe", tags=["Health"])
+async def gateway_liveness():
+    """Kubernetes liveness probe for API Gateway."""
+    return {
+        "status": "ok",
+        "service": settings.SERVICE_NAME,
+        "uptime_seconds": round(time.perf_counter(), 2),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.get("/health/ready", summary="Gateway Readiness Probe", tags=["Health"])
+async def gateway_readiness():
+    """Kubernetes readiness probe for API Gateway."""
+    return {
+        "status": "ok",
+        "service": settings.SERVICE_NAME,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.get("/health", summary="Cluster Health Aggregator", tags=["Health"])
 async def cluster_health():
     """Returns aggregated cluster health across all 6 microservices."""
     ws_http_base = settings.WS_SERVICE_URL.replace("ws://", "http://").replace("wss://", "https://")
@@ -75,3 +96,4 @@ async def cluster_health():
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "services": {r["name"]: r for r in results},
     }
+

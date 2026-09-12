@@ -10,6 +10,15 @@ api_router = APIRouter()
 api_router.include_router(auth_router, prefix="/auth")
 
 
+from shared.health import create_health_probe_router
+
+probe_router = create_health_probe_router(
+    service_name=settings.APP_NAME,
+    db_check=db_manager.is_connected,
+)
+api_router.include_router(probe_router, prefix="/health")
+
+
 @api_router.get(
     "/health",
     response_model=HealthResponse,

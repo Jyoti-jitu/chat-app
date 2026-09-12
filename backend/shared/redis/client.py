@@ -258,12 +258,31 @@ class RedisManager:
         res = await self.client.smembers(key)
         return set(res) if res else set()
 
+    async def is_connected(self) -> bool:
+        """Verifies if Redis connection or in-memory fallback is active and pingable."""
+        if self._client is None:
+            try:
+                await self.connect()
+            except Exception:
+                pass
+        if self._client is None:
+            return False
+        try:
+            if hasattr(self._client, "ping"):
+                res = await self._client.ping()
+                return bool(res)
+            return True
+        except Exception:
+            return False
+
+
     async def disconnect(self):
         """Closes Redis connections."""
         if self._client and hasattr(self._client, "close"):
             await self._client.close()
         self._client = None
         self._in_memory = None
+
 
 
 redis_manager = RedisManager()

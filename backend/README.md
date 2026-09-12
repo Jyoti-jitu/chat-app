@@ -687,12 +687,24 @@ This document serves as the master engineering blueprint and step-by-step implem
 ---
 
 ### Phase 29 — Production Architecture & Scaling
+- **Status**: ✅ **COMPLETED & VERIFIED**
 - **Deliverables**:
-  - Kubernetes / ECS deployment readiness.
-  - Liveness probes (`/health/live`) and Readiness probes (`/health/ready`).
-  - Zero-downtime rolling restart procedures.
+  - **Kubernetes Architecture ([`k8s/`](file:///Users/apple/Desktop/project/chat-app/k8s/))**: Declarative manifests for namespace, ConfigMap, Secrets, Redis, Ingress, Horizontal Pod Autoscalers (HPA v2), and Pod Disruption Budgets (PDB).
+  - **Standardized Health Probes ([`backend/shared/health/`](file:///Users/apple/Desktop/project/chat-app/backend/shared/health/))**:
+    - Liveness Probe (`/health/live`): Process liveness, event loop responsiveness, zero database queries to prevent cascading restarts.
+    - Readiness Probe (`/health/ready`): Dependency verification (MongoDB Atlas & Redis ping), returns HTTP 200 OK when ready, HTTP 503 Service Unavailable when backing stores are down.
+    - Mounted and verified across all 7 backend services + API Gateway rate-limit bypass.
+  - **Zero-Downtime Rolling Update Strategy**: `maxSurge: 25%`, `maxUnavailable: 0`, and `terminationGracePeriodSeconds` (30s/60s).
+  - **Production Scaling Runbook**: [`docs/PRODUCTION_SCALING.md`](file:///Users/apple/Desktop/project/chat-app/docs/PRODUCTION_SCALING.md).
 
 ---
+
+### Phase 30 — Metrics, Monitoring & Observability
+- **Deliverables**:
+  - Prometheus metrics exporter (`/metrics`) across microservices.
+  - OpenTelemetry distributed tracing integration.
+  - Service latency percentiles (p50, p95, p99), error rates, and active WebSocket metrics.
+
 
 ## 🔌 Microservice Port Mapping Table
 
@@ -755,5 +767,7 @@ This document serves as the master engineering blueprint and step-by-step implem
 - **Phase 26 (Docker Containerization & Compose Orchestration)**: ✅ **Completed & Verified** (Multi-stage Dockerfiles for all 7 microservices, Redis, Next.js standalone frontend, compose orchestration).
 - **Phase 27 (Environment Configuration & 12-Factor Compliance)**: ✅ **Completed & Verified** (Root & service `.env.example` templates, `validator.py`, `verify_env.py` diagnostic tool, production checklist).
 - **Phase 28 (OpenAPI & API Documentation)**: ✅ **Completed & Verified** (Multi-spec Swagger portal at `:8000/docs`, ReDoc, `export_openapi.py` with 62 endpoints, `API_DOCUMENTATION.md`).
-- **Phase 29 (Production Architecture & Scaling)**: ⏳ **Next in Queue**
+- **Phase 29 (Production Architecture & Scaling)**: ✅ **Completed & Verified** (Kubernetes manifests in `k8s/`, `/health/live` & `/health/ready` probes, HPA, PDB, zero-downtime runbook).
+- **Phase 30 (Metrics, Monitoring & Observability)**: ⏳ **Next in Queue**
+
 

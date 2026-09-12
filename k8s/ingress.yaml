@@ -1,0 +1,80 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fluxchat-ingress
+  namespace: fluxchat
+  labels:
+    app.kubernetes.io/name: fluxchat-ingress
+    app.kubernetes.io/part-of: fluxchat-platform
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/websocket-services: "api-gateway"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+spec:
+  tls:
+    - hosts:
+        - chat.fluxchat.com
+        - api.fluxchat.com
+      secretName: fluxchat-tls-cert
+  rules:
+    # 1. Dedicated API Domain
+    - host: api.fluxchat.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8000
+
+    # 2. Unified Web Client Domain (Frontend + Ingress Proxy Routing)
+    - host: chat.fluxchat.com
+      http:
+        paths:
+          # Route API traffic to Gateway
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8000
+          # Route WebSocket traffic to Gateway tunnel
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8000
+          # Route OpenAPI interactive documentation
+          - path: /docs
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8000
+          # Route ReDoc
+          - path: /redoc
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8000
+          # Route all other traffic to Next.js Web App
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-service
+                port:
+                  number: 3000

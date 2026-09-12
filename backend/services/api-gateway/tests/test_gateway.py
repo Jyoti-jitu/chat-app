@@ -147,3 +147,27 @@ def test_proxy_notification_service():
         assert "x-request-id" in resp.headers
 
 
+def test_gateway_liveness_and_readiness_probes():
+    """Tests Phase 29 Kubernetes liveness and readiness probes on API Gateway."""
+    with TestClient(app) as client:
+        # Root probes
+        live_resp = client.get("/health/live")
+        assert live_resp.status_code == 200
+        assert live_resp.json()["status"] == "ok"
+        assert "uptime_seconds" in live_resp.json()
+
+        ready_resp = client.get("/health/ready")
+        assert ready_resp.status_code == 200
+        assert ready_resp.json()["status"] == "ok"
+
+        # Versioned probes (/api/v1/health/...)
+        v1_live = client.get("/api/v1/health/live")
+        assert v1_live.status_code == 200
+        assert v1_live.json()["status"] == "ok"
+
+        v1_ready = client.get("/api/v1/health/ready")
+        assert v1_ready.status_code == 200
+        assert v1_ready.json()["status"] == "ok"
+
+
+

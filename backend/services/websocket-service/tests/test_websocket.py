@@ -41,7 +41,7 @@ def generate_test_token(user_id: str, email: str, username: str) -> str:
 
 @pytest.mark.asyncio
 async def test_health_endpoints():
-    """Verifies health check endpoints for WebSocket Service."""
+    """Verifies health check and probe endpoints for WebSocket Service."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         res = await ac.get("/health")
@@ -52,6 +52,16 @@ async def test_health_endpoints():
         assert "WebSocket" in data["service"]
         assert "active_connections" in data
         assert "active_users" in data
+
+        # Kubernetes Probes
+        live = await ac.get("/health/live")
+        assert live.status_code == 200
+        assert live.json()["status"] == "ok"
+
+        ready = await ac.get("/health/ready")
+        assert ready.status_code == 200
+        assert ready.json()["status"] == "ok"
+
 
 
 def test_websocket_unauthorized_rejected():

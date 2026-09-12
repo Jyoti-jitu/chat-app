@@ -38,7 +38,7 @@ def generate_test_token(user_id: str, email: str, username: str) -> str:
 
 @pytest.mark.asyncio
 async def test_health_endpoints():
-    """Verifies health check endpoints for Message Service."""
+    """Verifies health check and probe endpoints for Message Service."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         res = await ac.get("/health")
@@ -47,6 +47,17 @@ async def test_health_endpoints():
         assert data["status"] == "ok"
         assert data["database"] == "connected"
         assert "FluxChat" in data["service"]
+
+        # Kubernetes Probes
+        live = await ac.get("/health/live")
+        assert live.status_code == 200
+        assert live.json()["status"] == "ok"
+
+        ready = await ac.get("/health/ready")
+        assert ready.status_code == 200
+        assert ready.json()["status"] == "ok"
+        assert ready.json()["database"] == "connected"
+
 
 
 @pytest.mark.asyncio

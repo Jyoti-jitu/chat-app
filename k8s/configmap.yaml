@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluxchat-config
+  namespace: fluxchat
+  labels:
+    app.kubernetes.io/name: fluxchat-config
+    app.kubernetes.io/part-of: fluxchat-platform
+data:
+  APP_ENV: "production"
+  LOG_LEVEL: "info"
+  CORS_ORIGINS: '["https://chat.fluxchat.com","https://app.fluxchat.com","http://localhost:3000"]'
+  
+  # CoreDNS Service Discovery URIs (Namespace: fluxchat)
+  AUTH_SERVICE_URL: "http://auth-service.fluxchat.svc.cluster.local:8001"
+  USER_SERVICE_URL: "http://user-service.fluxchat.svc.cluster.local:8002"
+  CHAT_SERVICE_URL: "http://chat-service.fluxchat.svc.cluster.local:8003"
+  MESSAGE_SERVICE_URL: "http://message-service.fluxchat.svc.cluster.local:8004"
+  WS_SERVICE_URL: "ws://websocket-service.fluxchat.svc.cluster.local:8005/ws"
+  NOTIFICATION_SERVICE_URL: "http://notification-service.fluxchat.svc.cluster.local:8006"
+  GATEWAY_URL: "http://api-gateway.fluxchat.svc.cluster.local:8000"
+  
+  # Backing Store CoreDNS Hosts
+  REDIS_URL: "redis://redis-service.fluxchat.svc.cluster.local:6379/0"
+  MONGODB_DATABASE: "fluxchat_db"
+  
+  # Security & Rate Limiting Flags
+  RATE_LIMIT_ENABLED: "true"
+  RATE_LIMIT_AUTH: "25"
+  RATE_LIMIT_DEFAULT: "120"

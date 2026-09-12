@@ -63,3 +63,29 @@ async def test_mongodb_manager_lifecycle():
     ping = await db.command("ping")
     assert ping.get("ok") == 1.0
 
+
+@pytest.mark.asyncio
+async def test_auth_liveness_and_readiness_probes():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # Root probes
+        live_res = await ac.get("/health/live")
+        assert live_res.status_code == 200
+        assert live_res.json()["status"] == "ok"
+        assert "uptime_seconds" in live_res.json()
+
+        ready_res = await ac.get("/health/ready")
+        assert ready_res.status_code == 200
+        assert ready_res.json()["status"] == "ok"
+        assert ready_res.json()["database"] == "connected"
+
+        # Versioned probes (/api/v1/health/...)
+        v1_live = await ac.get("/api/v1/health/live")
+        assert v1_live.status_code == 200
+        assert v1_live.json()["status"] == "ok"
+
+        v1_ready = await ac.get("/api/v1/health/ready")
+        assert v1_ready.status_code == 200
+        assert v1_ready.json()["status"] == "ok"
+
+

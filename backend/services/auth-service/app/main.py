@@ -125,6 +125,11 @@ async def health() -> HealthResponse:
     )
 
 
+from app.api.v1.router import probe_router
+
+# Mount health probes at root (/health/live, /health/ready)
+app.include_router(probe_router, prefix="/health")
+
 from app.api.v1.auth import router as auth_router
 
 # Mount versioned API routes (/api/v1/...)
@@ -132,4 +137,5 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 # Also mount /auth directly as requested in Phase 3 specifications
 app.include_router(auth_router, prefix="/auth")
+
 
