@@ -1,0 +1,29 @@
+# ==============================================================================
+# FluxChat Render Blueprint Specification
+# Deploys the unified backend cluster as a production Web Service on Render
+# ==============================================================================
+
+services:
+  - type: web
+    name: fluxchat-backend
+    runtime: docker
+    dockerfilePath: backend/Dockerfile.render
+    dockerContext: backend
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: MONGODB_URL
+        sync: false
+      - key: MONGODB_DATABASE
+        value: fluxchat_db
+      - key: JWT_SECRET
+        generateValue: true
+      - key: TWO_FACTOR_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: "http://localhost:3000,https://*.vercel.app"
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+      - key: ENVIRONMENT
+        value: production

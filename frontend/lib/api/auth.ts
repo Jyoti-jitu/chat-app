@@ -6,7 +6,7 @@
 export const AUTH_SERVICE_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   process.env.NEXT_PUBLIC_AUTH_SERVICE_URL ||
-  "http://localhost:8001";
+  "http://localhost:8000";
 
 export interface LoginPayload {
   username: string;

@@ -7,7 +7,10 @@
 import { getStoredToken } from "./auth";
 
 export const WS_URL =
-  process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8005/ws";
+  process.env.NEXT_PUBLIC_WS_URL ||
+  (process.env.NEXT_PUBLIC_API_URL
+    ? process.env.NEXT_PUBLIC_API_URL.replace(/^http(s?):/, "ws$1:") + "/ws"
+    : "ws://localhost:8005/ws");
 
 export type EventCallback = (data: any) => void;
 

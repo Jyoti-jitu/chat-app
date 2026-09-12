@@ -7,7 +7,9 @@ import type { ActionSuccessResponse } from "./contact";
 
 export const NOTIFICATION_SERVICE_URL =
   process.env.NEXT_PUBLIC_NOTIFICATION_SERVICE_URL ||
-  "http://localhost:8006/api/v1";
+  (process.env.NEXT_PUBLIC_API_URL
+    ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1`
+    : "http://localhost:8006/api/v1");
 
 export interface ActorProfile {
   name: string;

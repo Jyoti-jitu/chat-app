@@ -4,7 +4,10 @@
  */
 
 export const USER_SERVICE_URL =
-  process.env.NEXT_PUBLIC_USER_SERVICE_URL || "http://localhost:8002/api/v1";
+  process.env.NEXT_PUBLIC_USER_SERVICE_URL ||
+  (process.env.NEXT_PUBLIC_API_URL
+    ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1`
+    : "http://localhost:8002/api/v1");
 
 export interface UserProfile {
   id: string;

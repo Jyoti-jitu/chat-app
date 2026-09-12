@@ -4,7 +4,10 @@
  */
 
 export const MESSAGE_SERVICE_URL =
-  process.env.NEXT_PUBLIC_MESSAGE_SERVICE_URL || "http://localhost:8004/api/v1";
+  process.env.NEXT_PUBLIC_MESSAGE_SERVICE_URL ||
+  (process.env.NEXT_PUBLIC_API_URL
+    ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1`
+    : "http://localhost:8004/api/v1");
 
 export interface MessageAttachmentItem {
   name: string;
