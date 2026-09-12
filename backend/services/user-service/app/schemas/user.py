@@ -38,6 +38,7 @@ class UserPublicProfileResponse(BaseModel):
     username: str
     avatar: Optional[str] = None
     bio: Optional[str] = None
+    phone: Optional[str] = None
     is_online: bool = False
     last_seen: Optional[datetime] = None
 

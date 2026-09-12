@@ -142,7 +142,7 @@ async def test_user_profile_lifecycle_and_search():
             assert updated_data["bio"] == patch_payload["bio"]
             assert updated_data["avatar"] == patch_payload["avatar"]
 
-            # 5. GET /api/v1/users/search?q=...
+            # 5a. GET /api/v1/users/search?q=... (by username)
             search_resp = await ac.get(f"/api/v1/users/search?q=Bob_{suffix}", headers=headers)
             assert search_resp.status_code == 200
             search_data = search_resp.json()
@@ -151,6 +151,25 @@ async def test_user_profile_lifecycle_and_search():
             assert user_b_id in found_ids
             # Ensure calling user is excluded from search results
             assert user_a_id not in found_ids
+
+            # 5b. GET /api/v1/users/search (Empty query - lists all registered users)
+            all_users_resp = await ac.get("/api/v1/users/search", headers=headers)
+            assert all_users_resp.status_code == 200
+            all_ids = [item["id"] for item in all_users_resp.json()["items"]]
+            assert user_b_id in all_ids
+            assert user_a_id not in all_ids
+
+            # 5c. GET /api/v1/users/search?q=... (by phone number)
+            phone_search_resp = await ac.get("/api/v1/users/search?q=9123456780", headers=headers)
+            assert phone_search_resp.status_code == 200
+            phone_ids = [item["id"] for item in phone_search_resp.json()["items"]]
+            assert user_b_id in phone_ids
+
+            # 5d. GET /api/v1/users/search?q=... (by name)
+            name_search_resp = await ac.get("/api/v1/users/search?q=Bob+Searchable", headers=headers)
+            assert name_search_resp.status_code == 200
+            name_ids = [item["id"] for item in name_search_resp.json()["items"]]
+            assert user_b_id in name_ids
 
             # 6. GET /api/v1/users/{user_b_id} (Public Profile)
             public_resp = await ac.get(f"/api/v1/users/{user_b_id}", headers=headers)

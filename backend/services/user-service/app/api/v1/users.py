@@ -2,7 +2,7 @@
 User profile and discovery API routes for FluxChat.
 Protected with shared JWT authorization dependency.
 """
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, Query, status
 from app.schemas.user import (
     UserProfileResponse,
@@ -50,17 +50,17 @@ async def update_my_profile(
     response_model=UserSearchResponse,
     status_code=status.HTTP_200_OK,
     summary="Search Users",
-    description="Searches users across username, name, email, or phone. Excludes current user.",
+    description="Searches users across username, name, email, or phone. Excludes current user. If query is empty, returns all registered users.",
 )
 async def search_users(
-    q: str = Query(..., min_length=1, max_length=50, description="Search query string"),
-    limit: int = Query(20, ge=1, le=50, description="Max results to return"),
+    q: Optional[str] = Query(default="", max_length=50, description="Search query string. If empty, lists all registered users."),
+    limit: int = Query(50, ge=1, le=100, description="Max results to return"),
     skip: int = Query(0, ge=0, description="Results offset for pagination"),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> UserSearchResponse:
-    """Searches directory of active users."""
+    """Searches directory of active users or lists all registered users."""
     return await user_service.search_users(
-        query=q,
+        query=q or "",
         current_user_id=current_user["id"],
         limit=limit,
         skip=skip,

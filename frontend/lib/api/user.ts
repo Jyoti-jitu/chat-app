@@ -30,6 +30,7 @@ export interface UserPublicProfile {
   username: string;
   avatar?: string | null;
   bio?: string | null;
+  phone?: string | null;
   is_online: boolean;
   last_seen?: string | null;
 }
@@ -99,16 +100,18 @@ export async function updateMyProfile(
 
 /**
  * Searches users across the platform by username, name, email, or phone.
+ * If query is empty, returns all registered users on the platform.
  */
 export async function searchUsers(
-  query: string,
-  limit: number = 20,
+  query: string = "",
+  limit: number = 50,
   token?: string
 ): Promise<UserSearchResponse> {
   const authToken = token || getStoredToken();
 
+  const queryString = query ? `?q=${encodeURIComponent(query)}&limit=${limit}` : `?limit=${limit}`;
   const res = await fetch(
-    `${USER_SERVICE_URL}/users/search?q=${encodeURIComponent(query)}&limit=${limit}`,
+    `${USER_SERVICE_URL}/users/search${queryString}`,
     {
       method: "GET",
       headers: {

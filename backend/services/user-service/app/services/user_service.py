@@ -70,20 +70,19 @@ class UserService:
 
     async def search_users(
         self,
-        query: str,
+        query: Optional[str] = "",
         current_user_id: Optional[str] = None,
-        limit: int = 20,
+        limit: int = 50,
         skip: int = 0,
     ) -> UserSearchResponse:
         """
-        Searches users matching query string. Excludes the searching user.
+        Searches users matching query string. If query is empty, returns all active users.
+        Excludes the searching user.
         """
-        clean_query = query.strip()
-        if not clean_query:
-            return UserSearchResponse(items=[], total=0, query=query)
+        clean_query = (query or "").strip()
 
         # Enforce limits
-        limit = max(1, min(limit, 50))
+        limit = max(1, min(limit, 100))
         skip = max(0, skip)
 
         users = await self.repository.search_users(

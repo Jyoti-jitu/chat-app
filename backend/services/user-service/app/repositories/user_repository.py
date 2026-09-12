@@ -74,25 +74,28 @@ class UserRepository:
     ) -> List[Dict[str, Any]]:
         """
         Searches users across username, name, email, or phone.
+        If query is empty, returns all active registered users.
         Excludes inactive accounts and the current calling user.
         """
-        clean_query = query.strip()
-        if not clean_query:
-            return []
-
-        # Case-insensitive safe regex
-        escaped_query = re.escape(clean_query)
-        regex_filter = {"$regex": escaped_query, "$options": "i"}
+        clean_query = (query or "").strip()
 
         search_filter: Dict[str, Any] = {
             "is_active": True,
-            "$or": [
+        }
+
+        if clean_query:
+            escaped_query = re.escape(clean_query)
+            regex_filter = {"$regex": escaped_query, "$options": "i"}
+            or_conditions: List[Dict[str, Any]] = [
                 {"username": regex_filter},
                 {"name": regex_filter},
                 {"email": regex_filter},
                 {"phone": regex_filter},
-            ],
-        }
+            ]
+            digits_only = re.sub(r"\D", "", clean_query)
+            if digits_only and len(digits_only) >= 3:
+                or_conditions.append({"phone": {"$regex": re.escape(digits_only), "$options": "i"}})
+            search_filter["$or"] = or_conditions
 
         if exclude_user_id:
             try:
@@ -119,22 +122,25 @@ class UserRepository:
         self, query: str, exclude_user_id: Optional[str] = None
     ) -> int:
         """Counts total users matching search query for pagination."""
-        clean_query = query.strip()
-        if not clean_query:
-            return 0
-
-        escaped_query = re.escape(clean_query)
-        regex_filter = {"$regex": escaped_query, "$options": "i"}
+        clean_query = (query or "").strip()
 
         search_filter: Dict[str, Any] = {
             "is_active": True,
-            "$or": [
+        }
+
+        if clean_query:
+            escaped_query = re.escape(clean_query)
+            regex_filter = {"$regex": escaped_query, "$options": "i"}
+            or_conditions: List[Dict[str, Any]] = [
                 {"username": regex_filter},
                 {"name": regex_filter},
                 {"email": regex_filter},
                 {"phone": regex_filter},
-            ],
-        }
+            ]
+            digits_only = re.sub(r"\D", "", clean_query)
+            if digits_only and len(digits_only) >= 3:
+                or_conditions.append({"phone": {"$regex": re.escape(digits_only), "$options": "i"}})
+            search_filter["$or"] = or_conditions
 
         if exclude_user_id:
             try:
