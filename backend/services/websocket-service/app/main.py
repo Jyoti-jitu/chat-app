@@ -15,6 +15,8 @@ import json
 from app.core.connection_manager import connection_manager
 from shared.database.mongodb import db_manager
 from shared.redis.client import redis_manager
+from shared.errors.handlers import register_exception_handlers
+
 
 
 async def redis_event_listener():
@@ -94,7 +96,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+register_exception_handlers(app)
+
 # CORS Configuration
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,

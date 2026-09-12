@@ -535,49 +535,60 @@ This document serves as the master engineering blueprint and step-by-step implem
 ---
 
 ### Phase 20 — Service-to-Service Communication Guidelines
+- **Status**: ✅ **COMPLETED & VERIFIED**
 - **Synchronous Communication**:
-  - Use `httpx.AsyncClient` for blocking, immediate data requests (e.g., Gateway validating token with Auth Service).
+  - Implemented reusable asynchronous `ServiceClient` (`shared/clients/service_client.py`) using `httpx.AsyncClient` with connection pooling, exponential backoff retries, configurable timeouts, and automatic `X-Request-ID` propagation.
+  - Pre-configured client factories: `get_auth_client()`, `get_user_client()`, `get_chat_client()`, `get_message_client()`, `get_notification_client()`.
+  - Automatic error unwrapping: translates HTTP 4xx/5xx into typed domain `AppException` classes.
 - **Asynchronous Communication**:
-  - Use Redis Pub/Sub events for non-blocking notifications, presence updates, and analytics.
+  - Redis Pub/Sub event bus (`fluxchat:events` & `system:broadcast`) utilized for non-blocking notifications, presence updates, and message fan-out.
 
 ---
 
 ### Phase 21 — Standardized Error Handling
+- **Status**: ✅ **COMPLETED & VERIFIED**
 - **Objective**: Uniform error responses across all microservices.
-- **Error Format**:
-  ```json
-  {
-    "error": {
-      "code": "USER_NOT_FOUND",
-      "message": "The requested user does not exist",
-      "request_id": "req_8bc739f",
-      "timestamp": "2026-09-12T19:00:00Z"
+- **Implementation**:
+  - Defined unified exception hierarchy in `shared/errors/exceptions.py`:
+    - `AuthenticationError` (401, `AUTHENTICATION_FAILED`)
+    - `AuthorizationError` (403, `PERMISSION_DENIED`)
+    - `NotFoundError` (404, `NOT_FOUND`)
+    - `ConflictError` (409, `CONFLICT`)
+    - `ValidationError` (422, `VALIDATION_ERROR`)
+    - `RateLimitError` (429, `RATE_LIMIT_EXCEEDED`)
+    - `BadGatewayError` (502, `BAD_GATEWAY`)
+    - `ServiceUnavailableError` (503, `SERVICE_UNAVAILABLE`)
+  - Global exception handlers in `shared/errors/handlers.py` (`register_exception_handlers(app)`) mounted across all 7 backend microservices, translating all exceptions into the canonical Phase 21 JSON envelope:
+    ```json
+    {
+      "error": {
+        "code": "USER_NOT_FOUND",
+        "message": "The requested user does not exist",
+        "request_id": "req_8bc739f",
+        "timestamp": "2026-09-12T19:00:00Z"
+      },
+      "detail": "The requested user does not exist"
     }
-  }
-  ```
-- **Custom Exceptions**:
-  - `AuthenticationError` (401)
-  - `AuthorizationError` (403)
-  - `NotFoundError` (404)
-  - `ConflictError` (409)
-  - `ValidationError` (422)
+    ```
 
 ---
 
 ### Phase 22 — Structured JSON Logging
-- **Objective**: Full auditability and centralized log ingestion.
-- **Log Format**:
-  ```json
-  {
-    "timestamp": "2026-09-12T19:00:00Z",
-    "service": "auth-service",
-    "level": "INFO",
-    "request_id": "req_123",
-    "user_id": "u_me",
-    "message": "User login successful"
-  }
-  ```
-- **Sanitization Rule**: Automatically redact `password`, `token`, `refresh_token`, and `authorization` headers.
+- **Status**: ✅ **COMPLETED & VERIFIED**
+- **Objective**: Full auditability, distributed tracing, and centralized log ingestion.
+- **Implementation**:
+  - Implemented `shared/logging/structured_logger.py` with `JsonFormatter`:
+    ```json
+    {
+      "timestamp": "2026-09-12T19:00:00Z",
+      "service": "auth-service",
+      "level": "INFO",
+      "request_id": "req_123",
+      "message": "User login successful"
+    }
+    ```
+  - **Sanitization Rule**: Deep recursive key-sanitization via `sanitize_dict` redacting `password`, `token`, `access_token`, `refresh_token`, `authorization`, `otp`, `secret`, and `api_key`.
+  - **Middleware**: `RequestLoggingMiddleware` tracking latency in milliseconds and tagging distributed `X-Request-ID`.
 
 ---
 

@@ -16,6 +16,8 @@ from app.api.v1.router import api_router
 from app.schemas.health import HealthResponse, RootResponse
 from shared.database.mongodb import db_manager
 from shared.database.indexes import IndexManager
+from shared.errors.handlers import register_exception_handlers
+
 
 
 @asynccontextmanager
@@ -50,7 +52,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+register_exception_handlers(app)
+
 # CORS Configuration
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[str(origin) for origin in settings.CORS_ORIGINS],

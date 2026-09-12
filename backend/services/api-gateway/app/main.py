@@ -18,6 +18,8 @@ from app.services.http_proxy import get_http_client, close_http_client
 from app.services.ws_proxy import proxy_websocket
 from app.api.v1.router import api_router
 from app.api.v1.health import cluster_health
+from shared.errors.handlers import register_exception_handlers
+
 
 
 @asynccontextmanager
@@ -37,6 +39,9 @@ app = FastAPI(
     description="Central API Gateway, reverse proxy, and WebSocket tunnel for FluxChat microservices.",
     lifespan=lifespan,
 )
+
+register_exception_handlers(app)
+
 
 
 class GatewayMiddleware(BaseHTTPMiddleware):

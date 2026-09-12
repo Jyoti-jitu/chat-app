@@ -10,6 +10,9 @@ from app.api.v1.router import v1_router
 from app.core.config import settings
 from app.core.logging import logger
 from shared.database.mongodb import db_manager
+from shared.errors.handlers import register_exception_handlers
+
+
 
 
 @asynccontextmanager
@@ -49,7 +52,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+register_exception_handlers(app)
+
 # CORS Configuration
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
