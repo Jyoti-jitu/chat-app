@@ -14,7 +14,7 @@ from starlette.websockets import WebSocket
 from app.core.config import settings
 from app.core.logging import logger
 from app.core.rate_limiter import rate_limiter
-from app.services.http_proxy import get_http_client, close_http_client
+from app.services.http_proxy import get_http_client, close_http_client, proxy_request
 from app.services.ws_proxy import proxy_websocket
 from app.api.v1.router import api_router
 from app.api.v1.health import cluster_health, gateway_liveness, gateway_readiness
@@ -134,7 +134,7 @@ class GatewayMiddleware(BaseHTTPMiddleware):
             client_ip = forwarded.split(",")[0].strip()
 
         # Determine rate limit quota
-        if path.startswith("/api/v1/auth"):
+        if path.startswith("/api/v1/auth") or path.startswith("/auth"):
             limit = settings.RATE_LIMIT_AUTH
             bucket_key = f"auth:{client_ip}"
         else:
@@ -234,3 +234,13 @@ async def websocket_proxy_endpoint(websocket: WebSocket):
 
 # Mount API v1 Routes
 app.include_router(api_router, prefix="/api/v1")
+
+# Direct /auth proxy for frontend compatibility (/auth/send-otp, /auth/verify-otp, etc.)
+AUTH_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+
+
+@app.api_route("/auth", methods=AUTH_METHODS, tags=["auth"])
+@app.api_route("/auth/{subpath:path}", methods=AUTH_METHODS, tags=["auth"])
+async def proxy_direct_auth(request: Request, subpath: str = ""):
+    return await proxy_request(request, settings.AUTH_SERVICE_URL)
+

@@ -170,4 +170,13 @@ def test_gateway_liveness_and_readiness_probes():
         assert v1_ready.json()["status"] == "ok"
 
 
+def test_gateway_direct_auth_proxy_routing():
+    """Tests that /auth/* routes are routed directly through to Auth Service."""
+    with TestClient(app) as client:
+        resp = client.post("/auth/send-otp", json={"phone": "9876543210"})
+        # Should NOT return 404 Not Found
+        assert resp.status_code != 404
+
+
+
 
