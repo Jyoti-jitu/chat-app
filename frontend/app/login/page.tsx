@@ -41,7 +41,7 @@ export default function LoginPage() {
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [otpCode, setOtpCode] = useState(["", "", "", "", "", ""]);
   const [resendCountdown, setResendCountdown] = useState(0);
-  const [otpChannel, setOtpChannel] = useState<"sms" | "voice">("sms");
+  const [otpChannel, setOtpChannel] = useState<"sms" | "voice">("voice");
 
   // Resend timer countdown
   useEffect(() => {
@@ -54,8 +54,8 @@ export default function LoginPage() {
     return () => clearTimeout(timer);
   }, [resendCountdown]);
 
-  // Handle Send OTP via Backend 2Factor API (SMS or Voice Call)
-  const handleSendOtp = async (channel: "sms" | "voice" = "sms") => {
+  // Handle Send OTP via Backend 2Factor API (Voice Call or SMS)
+  const handleSendOtp = async (channel: "sms" | "voice" = "voice") => {
     const cleanDigits = phoneNumber.replace(/\D/g, "");
     if (!cleanDigits || cleanDigits.length < 10) {
       setErrorNotice("Please enter a valid 10-digit mobile number");
@@ -320,26 +320,26 @@ export default function LoginPage() {
                   <div className="space-y-2">
                     <Button
                       type="button"
-                      onClick={() => handleSendOtp("sms")}
+                      onClick={() => handleSendOtp("voice")}
                       size="lg"
                       className="w-full"
                       isLoading={isSendingOtp}
-                      leftIcon={<KeyRound className="w-4 h-4" />}
+                      leftIcon={<PhoneCall className="w-4 h-4" />}
                     >
-                      Send SMS Verification Code
+                      Call Me with Verification Code
                     </Button>
 
                     <button
                       type="button"
-                      onClick={() => handleSendOtp("voice")}
+                      onClick={() => handleSendOtp("sms")}
                       disabled={isSendingOtp || !phoneNumber.trim()}
-                      className="w-full py-2.5 px-4 rounded-xl border border-[#E6EBE8] dark:border-[#212E29] bg-white dark:bg-[#151D1A] hover:bg-[#F7F9F8] dark:hover:bg-[#1A2420] text-xs font-semibold text-[#168F67] dark:text-[#22A06B] flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                      className="w-full py-2.5 px-4 rounded-xl border border-[#E6EBE8] dark:border-[#212E29] bg-white dark:bg-[#151D1A] hover:bg-[#F7F9F8] dark:hover:bg-[#1A2420] text-xs font-semibold text-[#66736D] hover:text-[#17211D] dark:hover:text-white flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
                     >
-                      <PhoneCall className="w-3.5 h-3.5" /> Call Me with Verification Code
+                      <KeyRound className="w-3.5 h-3.5" /> Or send via SMS
                     </button>
 
                     <p className="text-[11px] text-[#66736D] dark:text-[#8E9C95] text-center pt-1">
-                      We will send a 6-digit code via SMS or automated call to {selectedCountry.dialCode} {phoneNumber || "your phone"}.
+                      An automated call will speak your 6-digit code to {selectedCountry.dialCode} {phoneNumber || "your phone"}.
                     </p>
                   </div>
                 ) : (
@@ -398,20 +398,20 @@ export default function LoginPage() {
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => handleSendOtp("sms")}
+                            onClick={() => handleSendOtp("voice")}
                             disabled={isSendingOtp}
                             className="font-semibold text-[#168F67] dark:text-[#22A06B] hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
                           >
-                            <RotateCw className="w-3 h-3" /> Resend SMS
+                            <PhoneCall className="w-3 h-3" /> Call Me Again
                           </button>
                           <span>•</span>
                           <button
                             type="button"
-                            onClick={() => handleSendOtp("voice")}
+                            onClick={() => handleSendOtp("sms")}
                             disabled={isSendingOtp}
-                            className="font-semibold text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                            className="text-[#66736D] hover:text-[#17211D] dark:hover:text-white hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
                           >
-                            <PhoneCall className="w-3 h-3" /> Call Me
+                            <RotateCw className="w-3 h-3" /> Send SMS
                           </button>
                         </div>
                       )}

@@ -99,7 +99,7 @@ class AuthService:
         )
 
     async def send_otp(
-        self, phone: str, purpose: str = "register", channel: str = "sms"
+        self, phone: str, purpose: str = "register", channel: str = "voice"
     ) -> SendOtpResponse:
         """
         Requests an SMS or Voice Call OTP via 2Factor API.

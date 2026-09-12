@@ -51,14 +51,14 @@ class TwoFactorService:
         return digits
 
     async def send_otp(
-        self, phone: str, purpose: str = "register", channel: str = "sms"
+        self, phone: str, purpose: str = "register", channel: str = "voice"
     ) -> Dict[str, Any]:
         """
-        Sends OTP via 2Factor REST API (SMS or Voice Call).
+        Sends OTP via 2Factor REST API (Voice Call or SMS).
         Enforces 30s resend cooldown and tracks session in MongoDB.
         """
         clean_phone = self.normalize_indian_phone(phone)
-        delivery_channel = "voice" if channel.lower() == "voice" else "sms"
+        delivery_channel = "sms" if channel.lower() == "sms" else "voice"
         now = datetime.now(timezone.utc)
 
         # Check for active session cooldown
