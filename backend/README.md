@@ -513,15 +513,24 @@ This document serves as the master engineering blueprint and step-by-step implem
 ---
 
 ### Phase 19 — API Gateway
+- **Status**: ✅ **COMPLETED & VERIFIED**
 - **Objective**: Central reverse proxy and traffic manager for the microservices suite.
+- **Port**: `8000`
 - **Route Mapping**:
   - `/api/v1/auth/*` ➔ Auth Service (`http://127.0.0.1:8001`)
-  - `/api/v1/users/*` ➔ User Service (`http://127.0.0.1:8002`)
+  - `/api/v1/users/*` & `/api/v1/contacts/*` ➔ User Service (`http://127.0.0.1:8002`)
   - `/api/v1/conversations/*` ➔ Chat Service (`http://127.0.0.1:8003`)
-  - `/api/v1/messages/*` ➔ Message Service (`http://127.0.0.1:8004`)
-  - `/ws` ➔ WebSocket Service (`ws://127.0.0.1:8005`)
+  - `/api/v1/conversations/{id}/messages` & `/api/v1/messages/*` ➔ Message Service (`http://127.0.0.1:8004`)
+  - `/ws` & `/api/v1/ws` ➔ WebSocket Service (`ws://127.0.0.1:8005/ws`)
   - `/api/v1/notifications/*` ➔ Notification Service (`http://127.0.0.1:8006`)
-- **Features**: Centralized CORS headers, request ID tagging, rate limiting.
+  - `/health` & `/api/v1/health` ➔ Aggregated cluster health check probing all 6 services concurrently
+- **Features**:
+  - Centralized CORS allowing `http://localhost:3000` with credential support.
+  - End-to-end `X-Request-ID` injection and propagation.
+  - Sliding-window rate limiter per client IP with `X-RateLimit-*` RFC headers and HTTP 429 enforcement.
+  - Bidirectional WebSocket proxy tunneling with JWT authentication passthrough.
+  - Resilient error handling mapping network partitions to standardized 502/504 JSON errors.
+
 
 ---
 
