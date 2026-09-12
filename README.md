@@ -1,6 +1,10 @@
 # FluxChat — Modern Real-Time Chat & Collaboration Platform
 
-FluxChat is a full-featured, responsive, and beautifully designed modern messaging and collaboration platform built with Next.js 16 (App Router), TypeScript, and Tailwind CSS.
+FluxChat is a full-featured, responsive, and beautifully designed modern messaging and collaboration platform built with Next.js 16 (App Router), TypeScript, Tailwind CSS, and 7 distributed FastAPI microservices backed by MongoDB Atlas.
+
+> 📖 **Quick Links:**
+> - [RUNNING.md](RUNNING.md) — Step-by-step startup guide, commands, and troubleshooting.
+> - [PROJECT_FILES_AND_ARCHITECTURE_SUMMARY.md](PROJECT_FILES_AND_ARCHITECTURE_SUMMARY.md) — Comprehensive master summary of all files, models, and architectural components.
 
 ---
 
