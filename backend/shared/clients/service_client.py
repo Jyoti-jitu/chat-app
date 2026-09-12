@@ -19,7 +19,8 @@ from shared.errors.exceptions import (
     ServiceUnavailableError,
     ValidationError,
 )
-from shared.logging.structured_logger import get_logger
+from shared.loggers.structured_logger import get_logger
+
 
 logger = get_logger("Shared.ServiceClient")
 

@@ -18,11 +18,12 @@ from shared.errors.exceptions import (
     ValidationError,
 )
 from shared.errors.handlers import register_exception_handlers
-from shared.logging.structured_logger import (
+from shared.loggers.structured_logger import (
     JsonFormatter,
     RequestLoggingMiddleware,
     sanitize_dict,
 )
+
 
 
 def test_credential_sanitization():

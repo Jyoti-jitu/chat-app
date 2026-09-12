@@ -21,6 +21,7 @@ from app.schemas.auth import (
     LoginOtpRequest,
 )
 from app.services.auth_service import auth_service
+from shared.security.rate_limit import require_rate_limit
 
 router = APIRouter(prefix="", tags=["Authentication"])
 security = HTTPBearer(auto_error=False)
@@ -30,9 +31,11 @@ security = HTTPBearer(auto_error=False)
     "/send-otp",
     response_model=SendOtpResponse,
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_rate_limit("auth:send_otp", limit=10, window_seconds=60))],
     summary="Send SMS OTP via 2Factor",
     description="Dispatches a 6-digit SMS verification OTP to an Indian mobile number using 2Factor API.",
 )
+
 async def send_otp(payload: SendOtpRequest) -> SendOtpResponse:
     """Sends OTP via 2Factor API (SMS or Voice Call)."""
     return await auth_service.send_otp(
@@ -72,6 +75,7 @@ async def login_with_otp(payload: LoginOtpRequest) -> TokenResponse:
     "/register",
     response_model=TokenResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_rate_limit("auth:register", limit=15, window_seconds=60))],
     summary="Register a new user account",
     description="Registers a new account, generates secure password hash, and returns JWT tokens.",
 )
@@ -84,10 +88,12 @@ async def register(payload: UserRegisterRequest) -> TokenResponse:
     "/login",
     response_model=TokenResponse,
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_rate_limit("auth:login", limit=20, window_seconds=60))],
     summary="User Login",
     description="Authenticates credentials (email or username + password) and returns JWT tokens.",
 )
 async def login(payload: UserLoginRequest) -> TokenResponse:
+
     """Authenticates a user and issues new JWT tokens."""
     return await auth_service.login(payload)
 

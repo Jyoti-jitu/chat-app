@@ -593,21 +593,26 @@ This document serves as the master engineering blueprint and step-by-step implem
 ---
 
 ### Phase 23 — Comprehensive Security & Hardening
+- **Status**: ✅ **COMPLETED & VERIFIED**
 - **Defense-in-Depth Measures**:
-  - **IDOR Protection**: Verify user membership on every conversation, message, and contact action.
-  - **Rate Limiting**: Sliding window rate limiting on `/auth/login` (5 attempts / min) and `/auth/register` (3 attempts / hour) using Redis.
-  - **Injection Prevention**: Strongly typed Pydantic models prevent NoSQL query injection.
-  - **CORS Constraints**: Allow only verified domains (`http://localhost:3000`).
+  - **IDOR Protection**: Implemented `assert_resource_owner` and `assert_conversation_member` guards in `shared/security/dependencies.py` to enforce strict ownership and membership boundaries.
+  - **Redis-Backed Rate Limiting**: Implemented `require_rate_limit` dependency in `shared/security/rate_limit.py`, protecting `/auth/login`, `/auth/register`, and `/auth/send-otp` against brute-force attacks with HTTP 429 and `Retry-After` headers.
+  - **NoSQL Injection Prevention**: Strongly-typed `validate_object_id` parsing prevents nested operator injection attacks (`{"$gt": ""}`).
+  - **CORS Constraints**: Verified domains (`http://localhost:3000`) with credential support and exposed tracing headers.
 
 ---
 
 ### Phase 24 — MongoDB Compound Indexes Optimization
-- **Index Catalog**:
-  - `users`: `{ email: 1 }` (unique), `{ username: 1 }` (unique)
-  - `messages`: `{ conversation_id: 1, created_at: -1 }`
-  - `conversations`: `{ members: 1, updated_at: -1 }`
-  - `contact_requests`: `{ sender_id: 1, recipient_id: 1 }` (unique)
-  - `notifications`: `{ user_id: 1, created_at: -1, is_read: 1 }`
+- **Status**: ✅ **COMPLETED & VERIFIED**
+- **Objective**: Sub-millisecond queries, sorted timeline feeds, and unique roster constraints.
+- **Index Catalog Established on Atlas**:
+  - `users`: `{ email: 1 }` (unique), `{ username: 1 }` (unique), `{ phone: 1 }` (unique, partialFilterExpression on string)
+  - `messages`: `{ conversation_id: 1, created_at: -1, _id: -1 }` (cursor pagination index)
+  - `conversations`: `{ members: 1, updated_at: -1 }` (inbox thread timeline index)
+  - `contact_requests`: `{ sender_id: 1, recipient_id: 1 }` (unique), `{ recipient_id: 1, status: 1 }`
+  - `contacts`: `{ user_id: 1, contact_id: 1 }` (unique bilateral roster index)
+  - `notifications`: `{ user_id: 1, created_at: -1, is_read: 1 }` (inbox & unread counter index)
+  - `revoked_tokens`: `{ token: 1 }` (unique), `{ expires_at: 1 }` (automatic TTL cleanup)
 
 ---
 

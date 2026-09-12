@@ -154,3 +154,40 @@ async def require_admin(
             detail="Administrative privileges required.",
         )
     return current_user
+
+
+def validate_object_id(id_str: str, entity_name: str = "ID") -> ObjectId:
+    """
+    Validates that a string is a valid 24-character hexadecimal MongoDB ObjectId.
+    Prevents NoSQL injection attacks using nested query operators.
+    """
+    if not id_str or not isinstance(id_str, str) or not ObjectId.is_valid(id_str):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid {entity_name} format. Must be a 24-character hexadecimal string.",
+        )
+    return ObjectId(id_str)
+
+
+def assert_resource_owner(user_id: str, owner_id: str, resource_name: str = "Resource") -> None:
+    """
+    IDOR defense guard: Verifies that the current user owns the target resource.
+    """
+    if str(user_id) != str(owner_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Access denied: You do not have permission to modify this {resource_name}.",
+        )
+
+
+def assert_conversation_member(user_id: str, member_ids: list) -> None:
+    """
+    IDOR defense guard: Verifies that the current user is a member of the conversation.
+    """
+    str_members = [str(m) for m in member_ids]
+    if str(user_id) not in str_members:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: You are not a member of this conversation.",
+        )
+

@@ -147,6 +147,23 @@ class InMemoryRedis:
             await q.put(frame)
         return len(subscribers)
 
+    async def expire(self, key: str, seconds: int) -> bool:
+        async with self._lock:
+            if key in self._kv or key in self._sets:
+                self._expiry[key] = time.time() + seconds
+                return True
+            return False
+
+    async def ttl(self, key: str) -> int:
+        async with self._lock:
+            self._purge_expired(key)
+            if key not in self._kv and key not in self._sets:
+                return -2
+            if key not in self._expiry:
+                return -1
+            remaining = int(self._expiry[key] - time.time())
+            return max(0, remaining)
+
     def pubsub(self) -> InMemoryPubSub:
         return InMemoryPubSub(self)
 
@@ -155,6 +172,7 @@ class InMemoryRedis:
 
     async def close(self):
         pass
+
 
 
 class RedisManager:
