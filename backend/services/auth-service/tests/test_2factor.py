@@ -32,8 +32,11 @@ async def test_normalize_indian_phone():
 
 
 @pytest.mark.asyncio
-async def test_two_factor_registration_and_login():
+async def test_two_factor_registration_and_login(monkeypatch):
     """End-to-end test of 2Factor SMS OTP send, verify, registration, and OTP login."""
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "TWO_FACTOR_API_KEY", "")
+
     test_suffix = int(time.time() * 1000)
     phone_digits = f"98{str(test_suffix)[-8:]}"
     full_phone = f"+91{phone_digits}"

@@ -98,9 +98,11 @@ class AuthService:
             user=user_response,
         )
 
-    async def send_otp(self, phone: str, purpose: str = "register") -> SendOtpResponse:
+    async def send_otp(
+        self, phone: str, purpose: str = "register", channel: str = "sms"
+    ) -> SendOtpResponse:
         """
-        Requests an SMS OTP via 2Factor API.
+        Requests an SMS or Voice Call OTP via 2Factor API.
         For login, verifies that the user exists first.
         """
         if purpose == "login":
@@ -113,7 +115,7 @@ class AuthService:
                     detail="No account found with this mobile number. Please register first.",
                 )
 
-        result = await two_factor_service.send_otp(phone=phone, purpose=purpose)
+        result = await two_factor_service.send_otp(phone=phone, purpose=purpose, channel=channel)
         return SendOtpResponse(**result)
 
     async def verify_otp(self, session_id: str, otp: str, phone: str) -> VerifyOtpResponse:

@@ -34,9 +34,10 @@ class UserRegisterRequest(BaseModel):
 
 
 class SendOtpRequest(BaseModel):
-    """Payload for requesting a 2Factor SMS OTP."""
+    """Payload for requesting a 2Factor SMS or Voice Call OTP."""
     phone: str = Field(..., min_length=10, description="Recipient Indian mobile number")
     purpose: str = Field("register", pattern=r"^(register|login)$", description="Purpose: register or login")
+    channel: str = Field("sms", pattern=r"^(sms|voice)$", description="Delivery channel: sms or voice call")
 
 
 class SendOtpResponse(BaseModel):

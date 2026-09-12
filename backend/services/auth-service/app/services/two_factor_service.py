@@ -50,12 +50,15 @@ class TwoFactorService:
 
         return digits
 
-    async def send_otp(self, phone: str, purpose: str = "register") -> Dict[str, Any]:
+    async def send_otp(
+        self, phone: str, purpose: str = "register", channel: str = "sms"
+    ) -> Dict[str, Any]:
         """
-        Sends OTP via 2Factor REST API (AUTOGEN).
+        Sends OTP via 2Factor REST API (SMS or Voice Call).
         Enforces 30s resend cooldown and tracks session in MongoDB.
         """
         clean_phone = self.normalize_indian_phone(phone)
+        delivery_channel = "voice" if channel.lower() == "voice" else "sms"
         now = datetime.now(timezone.utc)
 
         # Check for active session cooldown
@@ -82,29 +85,30 @@ class TwoFactorService:
         mock_otp: Optional[str] = None
 
         if is_live_key:
-            # Call live 2Factor.in AUTOGEN API
-            url = f"{settings.TWO_FACTOR_BASE_URL}/{api_key}/SMS/{clean_phone}/AUTOGEN"
+            # Call live 2Factor.in API: SMS or VOICE route
+            endpoint = "VOICE" if delivery_channel == "voice" else "SMS"
+            url = f"{settings.TWO_FACTOR_BASE_URL}/{api_key}/{endpoint}/{clean_phone}/AUTOGEN"
             try:
                 async with httpx.AsyncClient(timeout=12.0) as client:
                     response = await client.get(url)
                     data = response.json()
 
                 if data.get("Status") != "Success":
-                    error_details = data.get("Details", "SMS dispatch failed")
-                    logger.error(f"2Factor API error response: {error_details}")
+                    error_details = data.get("Details", "OTP dispatch failed")
+                    logger.error(f"2Factor API error response ({endpoint}): {error_details}")
                     raise HTTPException(
                         status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail=f"2Factor SMS gateway error: {error_details}",
+                        detail=f"2Factor {endpoint} gateway error: {error_details}",
                     )
 
                 session_id = data["Details"]
-                logger.info(f"2Factor OTP dispatched successfully to +91 {clean_phone[-4:]}")
+                logger.info(f"2Factor {endpoint} OTP dispatched successfully to +91 {clean_phone[-4:]}")
 
             except httpx.RequestError as exc:
                 logger.error(f"Network error calling 2Factor API: {exc}")
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="Could not reach 2Factor SMS gateway. Please try again later.",
+                    detail="Could not reach 2Factor gateway. Please try again later.",
                 )
         else:
             # Development Mode: generates local dev session
@@ -122,6 +126,7 @@ class TwoFactorService:
             "session_id": session_id,
             "phone": clean_phone,
             "purpose": purpose,
+            "channel": delivery_channel,
             "attempts": 0,
             "is_verified": False,
             "mock_otp": mock_otp,
@@ -132,11 +137,13 @@ class TwoFactorService:
 
         await self.sessions_collection.insert_one(session_doc)
 
+        msg_type = "Voice call placed" if delivery_channel == "voice" else "SMS OTP sent"
         return {
             "status": "ok",
-            "message": f"OTP sent to +91 {clean_phone[:2]}******{clean_phone[-2:]}",
+            "message": f"{msg_type} to +91 {clean_phone[:2]}******{clean_phone[-2:]}",
             "session_id": session_id,
             "phone": f"+91{clean_phone}",
+            "channel": delivery_channel,
             "expires_in": settings.OTP_EXPIRE_MINUTES * 60,
             "resend_cooldown": settings.OTP_RESEND_COOLDOWN_SECONDS,
         }
@@ -191,8 +198,9 @@ class TwoFactorService:
         is_live_key = bool(api_key and api_key != "your_2factor_api_key_here")
 
         if is_live_key:
-            # Verify via 2Factor REST API
-            url = f"{settings.TWO_FACTOR_BASE_URL}/{api_key}/SMS/VERIFY/{session_id}/{clean_otp}"
+            # Verify via 2Factor REST API (SMS or VOICE)
+            endpoint = "VOICE" if session.get("channel") == "voice" else "SMS"
+            url = f"{settings.TWO_FACTOR_BASE_URL}/{api_key}/{endpoint}/VERIFY/{session_id}/{clean_otp}"
             try:
                 async with httpx.AsyncClient(timeout=12.0) as client:
                     response = await client.get(url)

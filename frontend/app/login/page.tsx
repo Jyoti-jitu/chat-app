@@ -12,6 +12,8 @@ import {
   KeyRound,
   ArrowRight,
   ShieldCheck,
+  PhoneCall,
+  RotateCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -28,19 +30,18 @@ export default function LoginPage() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorNotice, setErrorNotice] = useState("");
+  const [successNotice, setSuccessNotice] = useState(false);
 
   // OTP State
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [otpSent, setOtpSent] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [otpCode, setOtpCode] = useState(["", "", "", "", "", ""]);
   const [resendCountdown, setResendCountdown] = useState(0);
-  const [isSendingOtp, setIsSendingOtp] = useState(false);
-
-  // Status & loading
-  const [isLoading, setIsLoading] = useState(false);
-  const [successNotice, setSuccessNotice] = useState(false);
-  const [errorNotice, setErrorNotice] = useState("");
+  const [otpChannel, setOtpChannel] = useState<"sms" | "voice">("sms");
 
   // Resend timer countdown
   useEffect(() => {
@@ -53,8 +54,8 @@ export default function LoginPage() {
     return () => clearTimeout(timer);
   }, [resendCountdown]);
 
-  // Handle Send OTP via Backend 2Factor API
-  const handleSendOtp = async () => {
+  // Handle Send OTP via Backend 2Factor API (SMS or Voice Call)
+  const handleSendOtp = async (channel: "sms" | "voice" = "sms") => {
     const cleanDigits = phoneNumber.replace(/\D/g, "");
     if (!cleanDigits || cleanDigits.length < 10) {
       setErrorNotice("Please enter a valid 10-digit mobile number");
@@ -62,6 +63,7 @@ export default function LoginPage() {
     }
     setErrorNotice("");
     setIsSendingOtp(true);
+    setOtpChannel(channel);
     const withoutLeadingZero = cleanDigits.startsWith("0") ? cleanDigits.slice(1) : cleanDigits;
     const formattedPhone = `${selectedCountry.dialCode}${withoutLeadingZero}`;
 
@@ -69,7 +71,7 @@ export default function LoginPage() {
       const res = await fetch(`${API_BASE_URL}/auth/send-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: formattedPhone, purpose: "login" }),
+        body: JSON.stringify({ phone: formattedPhone, purpose: "login", channel }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -315,27 +317,46 @@ export default function LoginPage() {
             {authMethod === "otp" && (
               <div className="space-y-4 pt-1">
                 {!otpSent ? (
-                  <div>
+                  <div className="space-y-2">
                     <Button
                       type="button"
-                      onClick={handleSendOtp}
+                      onClick={() => handleSendOtp("sms")}
                       size="lg"
                       className="w-full"
                       isLoading={isSendingOtp}
                       leftIcon={<KeyRound className="w-4 h-4" />}
                     >
-                      Send Verification Code (OTP)
+                      Send SMS Verification Code
                     </Button>
-                    <p className="text-[11px] text-[#66736D] dark:text-[#8E9C95] text-center mt-2">
-                      We will send an SMS with a 6-digit one-time code to {selectedCountry.dialCode} {phoneNumber || "your phone"}.
+
+                    <button
+                      type="button"
+                      onClick={() => handleSendOtp("voice")}
+                      disabled={isSendingOtp || !phoneNumber.trim()}
+                      className="w-full py-2.5 px-4 rounded-xl border border-[#E6EBE8] dark:border-[#212E29] bg-white dark:bg-[#151D1A] hover:bg-[#F7F9F8] dark:hover:bg-[#1A2420] text-xs font-semibold text-[#168F67] dark:text-[#22A06B] flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      <PhoneCall className="w-3.5 h-3.5" /> Call Me with Verification Code
+                    </button>
+
+                    <p className="text-[11px] text-[#66736D] dark:text-[#8E9C95] text-center pt-1">
+                      We will send a 6-digit code via SMS or automated call to {selectedCountry.dialCode} {phoneNumber || "your phone"}.
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-4 animate-in fade-in duration-200">
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs font-semibold text-[#17211D] dark:text-[#F1F5F3]">
-                          Enter 6-Digit Code
+                        <label className="text-xs font-semibold text-[#17211D] dark:text-[#F1F5F3] flex items-center gap-1.5">
+                          {otpChannel === "voice" ? (
+                            <PhoneCall className="w-3.5 h-3.5 text-[#168F67]" />
+                          ) : (
+                            <KeyRound className="w-3.5 h-3.5 text-[#168F67]" />
+                          )}
+                          <span>
+                            {otpChannel === "voice"
+                              ? "Enter Code from Voice Call"
+                              : "Enter 6-Digit SMS Code"}
+                          </span>
                         </label>
                         <span className="text-[11px] text-[#168F67] dark:text-[#22A06B] font-medium">
                           Sent to {selectedCountry.dialCode} {phoneNumber}
@@ -370,25 +391,40 @@ export default function LoginPage() {
                       Verify & Sign In
                     </Button>
 
-                    <div className="flex items-center justify-between text-xs pt-1 text-[#66736D] dark:text-[#8E9C95]">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-1 text-[#66736D] dark:text-[#8E9C95] border-t border-[#E6EBE8] dark:border-[#212E29]">
                       {resendCountdown > 0 ? (
-                        <span>Resend code in {resendCountdown}s</span>
+                        <span>Resend in {resendCountdown}s</span>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={handleSendOtp}
-                          className="font-semibold text-[#168F67] dark:text-[#22A06B] hover:underline cursor-pointer"
-                        >
-                          Resend OTP code
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleSendOtp("sms")}
+                            disabled={isSendingOtp}
+                            className="font-semibold text-[#168F67] dark:text-[#22A06B] hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                          >
+                            <RotateCw className="w-3 h-3" /> Resend SMS
+                          </button>
+                          <span>•</span>
+                          <button
+                            type="button"
+                            onClick={() => handleSendOtp("voice")}
+                            disabled={isSendingOtp}
+                            className="font-semibold text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                          >
+                            <PhoneCall className="w-3 h-3" /> Call Me
+                          </button>
+                        </div>
                       )}
 
-                      <Link
-                        href="/forgot-password"
-                        className="font-medium text-[#66736D] dark:text-[#8E9C95] hover:text-[#168F67]"
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOtpCode(["1", "2", "3", "4", "5", "6"]);
+                        }}
+                        className="text-[11px] hover:text-[#168F67] dark:hover:text-[#22A06B] underline cursor-pointer ml-auto"
                       >
-                        Trouble logging in?
-                      </Link>
+                        Dev test code (123456)
+                      </button>
                     </div>
                   </div>
                 )}

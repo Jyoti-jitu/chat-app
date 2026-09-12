@@ -34,8 +34,10 @@ security = HTTPBearer(auto_error=False)
     description="Dispatches a 6-digit SMS verification OTP to an Indian mobile number using 2Factor API.",
 )
 async def send_otp(payload: SendOtpRequest) -> SendOtpResponse:
-    """Sends OTP via 2Factor API."""
-    return await auth_service.send_otp(phone=payload.phone, purpose=payload.purpose)
+    """Sends OTP via 2Factor API (SMS or Voice Call)."""
+    return await auth_service.send_otp(
+        phone=payload.phone, purpose=payload.purpose, channel=payload.channel
+    )
 
 
 @router.post(

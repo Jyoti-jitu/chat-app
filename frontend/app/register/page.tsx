@@ -19,6 +19,7 @@ import {
   Check,
   ArrowRight,
   Edit3,
+  PhoneCall,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -49,6 +50,7 @@ export default function RegisterPage() {
   const [otpCode, setOtpCode] = useState(["", "", "", "", "", ""]);
   const [resendCountdown, setResendCountdown] = useState(0);
   const [verificationSuccess, setVerificationSuccess] = useState(false);
+  const [otpChannel, setOtpChannel] = useState<"sms" | "voice">("sms");
 
   // Password & UI State
   const [password, setPassword] = useState("");
@@ -102,8 +104,8 @@ export default function RegisterPage() {
     }
   };
 
-  // Request SMS OTP via Backend 2Factor API
-  const handleInitiateVerify = async () => {
+  // Request SMS or Voice OTP via Backend 2Factor API
+  const handleInitiateVerify = async (channel: "sms" | "voice" = "sms") => {
     const formattedPhone = getNormalizedPhoneNumber();
     const cleanNumber = phoneNumber.replace(/\D/g, "");
 
@@ -115,6 +117,7 @@ export default function RegisterPage() {
     setError("");
     setOtpError("");
     setIsSendingOtp(true);
+    setOtpChannel(channel);
 
     try {
       const response = await fetch(`${API_BASE_URL}/auth/send-otp`, {
@@ -123,13 +126,14 @@ export default function RegisterPage() {
         body: JSON.stringify({
           phone: formattedPhone,
           purpose: "register",
+          channel: channel,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.detail || "Failed to dispatch SMS OTP. Please check the number.");
+        throw new Error(data.detail || "Failed to dispatch OTP. Please check the number.");
       }
 
       setSessionId(data.session_id);
@@ -455,7 +459,7 @@ export default function RegisterPage() {
                   ) : (
                     <button
                       type="button"
-                      onClick={handleInitiateVerify}
+                      onClick={() => handleInitiateVerify("sms")}
                       disabled={isSendingOtp || !phoneNumber.trim()}
                       title="Send SMS verification OTP via 2Factor"
                       className="h-10.5 px-3.5 rounded-r-xl bg-[#168F67] hover:bg-[#127A57] active:scale-[0.98] text-white font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shrink-0 shadow-xs border border-[#168F67]"
@@ -484,9 +488,14 @@ export default function RegisterPage() {
                     <Check className="w-3 h-3" /> 2Factor OTP Verified
                   </span>
                 ) : (
-                  <span className="text-amber-600 dark:text-amber-400 font-medium">
-                    SMS OTP verification required
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleInitiateVerify("voice")}
+                    disabled={isSendingOtp || !phoneNumber.trim()}
+                    className="text-[#168F67] dark:text-[#22A06B] font-semibold hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  >
+                    <PhoneCall className="w-3 h-3" /> Or Call Me with OTP
+                  </button>
                 )}
               </div>
             </div>
@@ -497,14 +506,22 @@ export default function RegisterPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-lg bg-[#168F67]/15 flex items-center justify-center text-[#168F67]">
-                      <Smartphone className="w-4 h-4" />
+                      {otpChannel === "voice" ? (
+                        <PhoneCall className="w-4 h-4 text-[#168F67]" />
+                      ) : (
+                        <Smartphone className="w-4 h-4 text-[#168F67]" />
+                      )}
                     </div>
                     <div>
                       <h4 className="text-xs font-bold text-[#17211D] dark:text-[#F1F5F3]">
-                        Enter 6-digit SMS OTP
+                        {otpChannel === "voice"
+                          ? "Voice call placed! Enter 6-digit Code"
+                          : "Enter 6-digit SMS OTP"}
                       </h4>
                       <p className="text-[11px] text-[#66736D] dark:text-[#8E9C95]">
-                        Sent to{" "}
+                        {otpChannel === "voice"
+                          ? "An automated call is speaking your code to "
+                          : "Sent via SMS to "}
                         <span className="font-semibold text-[#17211D] dark:text-[#F1F5F3]">
                           {selectedCountry.dialCode} {phoneNumber}
                         </span>
@@ -550,29 +567,40 @@ export default function RegisterPage() {
                 </div>
 
                 {/* OTP Action Bar */}
-                <div className="flex items-center justify-between text-xs pt-1">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-1 border-t border-[#E6EBE8] dark:border-[#212E29]">
                   {resendCountdown > 0 ? (
                     <span className="text-[11px] text-[#66736D] dark:text-[#8E9C95]">
-                      Resend OTP in <span className="font-mono font-semibold">{resendCountdown}s</span>
+                      Resend in <span className="font-mono font-semibold">{resendCountdown}s</span>
                     </span>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={handleInitiateVerify}
-                      disabled={isSendingOtp}
-                      className="text-[11px] font-semibold text-[#168F67] dark:text-[#22A06B] hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                    >
-                      <RotateCw className="w-3 h-3" /> Resend OTP
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleInitiateVerify("sms")}
+                        disabled={isSendingOtp}
+                        className="text-[11px] font-semibold text-[#168F67] dark:text-[#22A06B] hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      >
+                        <RotateCw className="w-3 h-3" /> Resend SMS
+                      </button>
+                      <span className="text-[#66736D] dark:text-[#8E9C95]">•</span>
+                      <button
+                        type="button"
+                        onClick={() => handleInitiateVerify("voice")}
+                        disabled={isSendingOtp}
+                        className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      >
+                        <PhoneCall className="w-3 h-3" /> Call Me
+                      </button>
+                    </div>
                   )}
 
                   <button
                     type="button"
                     onClick={handleUseTestOtp}
                     title="Dev mode test code (123456)"
-                    className="text-[11px] text-[#66736D] hover:text-[#168F67] dark:hover:text-[#22A06B] underline cursor-pointer"
+                    className="text-[11px] text-[#66736D] hover:text-[#168F67] dark:hover:text-[#22A06B] underline cursor-pointer ml-auto"
                   >
-                    Dev test code (123456)
+                    Dev code (123456)
                   </button>
                 </div>
 
