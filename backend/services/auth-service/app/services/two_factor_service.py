@@ -115,9 +115,9 @@ class TwoFactorService:
         else:
             # Development Mode: generates local dev session
             session_id = f"DEV-{uuid.uuid4().hex[:16]}"
-            mock_otp = "123456"
+            mock_otp = "1234"
             logger.info(
-                f"[DEV MODE] 2Factor mock OTP '123456' active for +91{clean_phone} (session: {session_id})"
+                f"[DEV MODE] 2Factor mock OTP '1234' active for +91{clean_phone} (session: {session_id})"
             )
 
         # Save session tracking document
@@ -233,10 +233,10 @@ class TwoFactorService:
                 )
         else:
             # Dev mock verification
-            if clean_otp != "123456" and clean_otp != session.get("mock_otp"):
+            if clean_otp not in ("1234", "123456") and clean_otp != session.get("mock_otp"):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid OTP code. In dev mode, use '123456'.",
+                    detail="Invalid OTP code. In dev mode, use '1234' or '123456'.",
                 )
 
         # Mark session verified

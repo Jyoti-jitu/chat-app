@@ -47,7 +47,7 @@ export default function RegisterPage() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
-  const [otpCode, setOtpCode] = useState(["", "", "", "", "", ""]);
+  const [otpCode, setOtpCode] = useState(["", "", "", ""]);
   const [resendCountdown, setResendCountdown] = useState(0);
   const [verificationSuccess, setVerificationSuccess] = useState(false);
   const [otpChannel, setOtpChannel] = useState<"sms" | "voice">("voice");
@@ -139,7 +139,7 @@ export default function RegisterPage() {
       setSessionId(data.session_id);
       setIsVerifying(true);
       setResendCountdown(data.resend_cooldown || 30);
-      setOtpCode(["", "", "", "", "", ""]);
+      setOtpCode(["", "", "", ""]);
 
       // Focus first OTP input
       setTimeout(() => {
@@ -163,12 +163,12 @@ export default function RegisterPage() {
     setOtpCode(newCode);
 
     // Auto-advance to next box
-    if (val && index < 5) {
+    if (val && index < 3) {
       otpInputRefs.current[index + 1]?.focus();
     }
 
-    // Auto-verify if all 6 digits entered
-    if (val && index === 5 && newCode.every((d) => d !== "")) {
+    // Auto-verify if all 4 digits entered
+    if (val && index === 3 && newCode.every((d) => d !== "")) {
       verifyOtpCode(newCode.join(""));
     }
   };
@@ -183,27 +183,27 @@ export default function RegisterPage() {
   // Handle paste in OTP input
   const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
-    const pastedData = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    const pastedData = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 4);
     if (!pastedData) return;
 
     const newCode = [...otpCode];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 4; i++) {
       newCode[i] = pastedData[i] || "";
     }
     setOtpCode(newCode);
 
-    if (pastedData.length === 6) {
+    if (pastedData.length === 4) {
       verifyOtpCode(pastedData);
     } else {
-      otpInputRefs.current[Math.min(pastedData.length, 5)]?.focus();
+      otpInputRefs.current[Math.min(pastedData.length, 3)]?.focus();
     }
   };
 
   // Verify OTP submission via Backend 2Factor API
   const verifyOtpCode = async (codeToVerify?: string) => {
     const code = codeToVerify || otpCode.join("");
-    if (code.length < 6) {
-      setOtpError("Please enter the complete 6-digit verification code.");
+    if (code.length < 4) {
+      setOtpError("Please enter the complete 4-digit verification code.");
       return;
     }
 
@@ -251,14 +251,14 @@ export default function RegisterPage() {
   // Change phone number action
   const handleChangePhone = () => {
     setIsVerifying(false);
-    setOtpCode(["", "", "", "", "", ""]);
+    setOtpCode(["", "", "", ""]);
     setOtpError("");
     setSessionId(null);
   };
 
-  // Localhost development helper (accepts 123456 in dev mode)
+  // Localhost development helper (accepts 1234 in dev mode)
   const handleUseTestOtp = () => {
-    const testCode = ["1", "2", "3", "4", "5", "6"];
+    const testCode = ["1", "2", "3", "4"];
     setOtpCode(testCode);
     verifyOtpCode(testCode.join(""));
   };
@@ -515,8 +515,8 @@ export default function RegisterPage() {
                     <div>
                       <h4 className="text-xs font-bold text-[#17211D] dark:text-[#F1F5F3]">
                         {otpChannel === "voice"
-                          ? "Voice call placed! Enter 6-digit Code"
-                          : "Enter 6-digit SMS OTP"}
+                          ? "Voice call placed! Enter 4-digit Code"
+                          : "Enter 4-digit SMS OTP"}
                       </h4>
                       <p className="text-[11px] text-[#66736D] dark:text-[#8E9C95]">
                         {otpChannel === "voice"
@@ -545,8 +545,8 @@ export default function RegisterPage() {
                   </div>
                 )}
 
-                {/* 6 Digit Inputs */}
-                <div className="flex justify-between gap-1.5 py-1">
+                {/* 4 Digit Inputs */}
+                <div className="flex justify-center gap-3 py-1">
                   {otpCode.map((digit, idx) => (
                     <input
                       key={idx}
@@ -561,7 +561,7 @@ export default function RegisterPage() {
                       onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
                       onKeyDown={(e) => handleOtpKeyDown(idx, e)}
                       onPaste={handleOtpPaste}
-                      className="w-10 h-11 text-center font-bold text-base rounded-xl bg-white dark:bg-[#151D1A] border border-[#E6EBE8] dark:border-[#212E29] text-[#17211D] dark:text-[#F1F5F3] focus:outline-none focus:border-[#168F67] focus:ring-2 focus:ring-[#168F67]/20 transition-all"
+                      className="w-13 h-14 text-center font-bold text-xl rounded-xl bg-white dark:bg-[#151D1A] border border-[#E6EBE8] dark:border-[#212E29] text-[#17211D] dark:text-[#F1F5F3] focus:outline-none focus:border-[#168F67] focus:ring-2 focus:ring-[#168F67]/20 transition-all shadow-xs"
                     />
                   ))}
                 </div>

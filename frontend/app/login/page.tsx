@@ -39,7 +39,7 @@ export default function LoginPage() {
   const [otpSent, setOtpSent] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
-  const [otpCode, setOtpCode] = useState(["", "", "", "", "", ""]);
+  const [otpCode, setOtpCode] = useState(["", "", "", ""]);
   const [resendCountdown, setResendCountdown] = useState(0);
   const [otpChannel, setOtpChannel] = useState<"sms" | "voice">("voice");
 
@@ -79,6 +79,7 @@ export default function LoginPage() {
       }
       setSessionId(data.session_id);
       setOtpSent(true);
+      setOtpCode(["", "", "", ""]);
       setResendCountdown(data.resend_cooldown || 30);
     } catch (err: unknown) {
       setErrorNotice(err instanceof Error ? err.message : "Failed to send OTP.");
@@ -95,7 +96,7 @@ export default function LoginPage() {
     setOtpCode(newOtp);
 
     // Auto-focus next input
-    if (value && index < 5) {
+    if (value && index < 3) {
       const nextInput = document.getElementById(`otp-${index + 1}`);
       nextInput?.focus();
     }
@@ -127,8 +128,8 @@ export default function LoginPage() {
       }
     } else {
       const fullCode = otpCode.join("");
-      if (fullCode.length < 6) {
-        setErrorNotice("Please enter the complete 6-digit verification code");
+      if (fullCode.length < 4) {
+        setErrorNotice("Please enter the complete 4-digit verification code");
         return;
       }
       if (!sessionId) {
@@ -355,7 +356,7 @@ export default function LoginPage() {
                           <span>
                             {otpChannel === "voice"
                               ? "Enter Code from Voice Call"
-                              : "Enter 6-Digit SMS Code"}
+                              : "Enter 4-Digit SMS Code"}
                           </span>
                         </label>
                         <span className="text-[11px] text-[#168F67] dark:text-[#22A06B] font-medium">
@@ -363,8 +364,8 @@ export default function LoginPage() {
                         </span>
                       </div>
 
-                      {/* 6-box OTP inputs */}
-                      <div className="flex items-center justify-between gap-2">
+                      {/* 4-box OTP inputs */}
+                      <div className="flex items-center justify-center gap-3">
                         {otpCode.map((digit, idx) => (
                           <input
                             key={idx}
@@ -375,7 +376,7 @@ export default function LoginPage() {
                             value={digit}
                             onChange={(e) => handleOtpChange(idx, e.target.value)}
                             onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                            className="w-11 h-12 text-center text-lg font-bold rounded-xl border border-[#E6EBE8] dark:border-[#212E29] bg-white dark:bg-[#151D1A] text-[#17211D] dark:text-[#F1F5F3] focus:border-[#168F67] focus:ring-2 focus:ring-[#168F67]/20 outline-none transition-all shadow-xs"
+                            className="w-13 h-14 text-center text-xl font-bold rounded-xl border border-[#E6EBE8] dark:border-[#212E29] bg-white dark:bg-[#151D1A] text-[#17211D] dark:text-[#F1F5F3] focus:border-[#168F67] focus:ring-2 focus:ring-[#168F67]/20 outline-none transition-all shadow-xs"
                           />
                         ))}
                       </div>
