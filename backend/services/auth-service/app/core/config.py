@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     API_V1_STR: str = "/api/v1"
 
+    # Database Configuration (Phase 2)
+    MONGODB_URL: str = "mongodb://localhost:27017"
+    MONGODB_DATABASE: str = "fluxchat_db"
+
     CORS_ORIGINS: Union[List[str], str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
@@ -36,3 +40,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

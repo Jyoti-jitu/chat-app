@@ -1,8 +1,11 @@
+from typing import Optional
 from pydantic import BaseModel, Field
+
 
 
 class HealthResponse(BaseModel):
     status: str = Field(default="ok", description="Service operational status")
+    database: Optional[str] = Field(default=None, description="Database connection status")
     service: str = Field(..., description="Name of the running microservice")
     version: str = Field(default="1.0.0", description="Microservice API version")
     environment: str = Field(..., description="Running environment (development/production)")
@@ -11,5 +14,7 @@ class HealthResponse(BaseModel):
 class RootResponse(BaseModel):
     message: str = Field(..., description="Welcome message")
     service: str = Field(..., description="Service name")
+    database: Optional[str] = Field(default=None, description="Database connection status")
     docs_url: str = Field(..., description="Interactive OpenAPI documentation URL")
     health_url: str = Field(..., description="Health check endpoint URL")
+
