@@ -29,7 +29,13 @@ yarn-error.log*
 
 # Environment files
 .env
-.env*.local
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!.env.*.example
+!**/.env.example
+!**/.env.*.example
 
 # IDE & Editors
 .idea/

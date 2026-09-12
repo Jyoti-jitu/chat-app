@@ -41,6 +41,17 @@ class UserRepository:
         doc = await self.collection.find_one({"username": username.strip().lower()})
         return self.to_clean_dict(doc)
 
+    async def get_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+        """Finds user by case-insensitive email."""
+        doc = await self.collection.find_one({"email": email.strip().lower()})
+        return self.to_clean_dict(doc)
+
+    async def get_by_phone(self, phone: str) -> Optional[Dict[str, Any]]:
+        """Finds user by normalized phone."""
+        clean = phone.strip()
+        doc = await self.collection.find_one({"phone": clean})
+        return self.to_clean_dict(doc)
+
     async def update_profile(
         self, user_id: str, updates: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:

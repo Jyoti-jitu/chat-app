@@ -10,6 +10,14 @@ from pydantic import BaseModel, EmailStr, Field
 class UserProfileUpdate(BaseModel):
     """Payload for updating authenticated user's profile details."""
     name: Optional[str] = Field(None, min_length=2, max_length=100, description="Full display name")
+    username: Optional[str] = Field(
+        None,
+        min_length=3,
+        max_length=30,
+        pattern=r"^[a-zA-Z0-9_]+$",
+        description="Unique username containing letters, numbers, or underscores",
+    )
+    email: Optional[EmailStr] = Field(None, description="Updated valid email address")
     bio: Optional[str] = Field(None, max_length=250, description="Short personal bio or status message")
     avatar: Optional[str] = Field(None, max_length=1000, description="Avatar image URL or base64 data URI")
     phone: Optional[str] = Field(None, description="Updated phone number")

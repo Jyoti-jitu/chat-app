@@ -21,6 +21,7 @@ from app.schemas.auth import (
     LogoutResponse,
     SendOtpResponse,
     VerifyOtpResponse,
+    ChangePasswordResponse,
 )
 from app.services.two_factor_service import two_factor_service
 
@@ -327,6 +328,42 @@ class AuthService:
 
         clean_user = UserModel.to_dict(user)
         return UserResponse(**clean_user)
+
+    async def change_password(
+        self, user_id: str, current_password: str, new_password: str
+    ) -> ChangePasswordResponse:
+        """
+        Validates current password and securely updates to new password hash.
+        """
+        user = await self.repository.get_by_id(user_id)
+        if not user or not user.get("is_active", True):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User account not found or disabled.",
+            )
+
+        if not PasswordHasher.verify_password(current_password, user.get("password_hash", "")):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password is incorrect.",
+            )
+
+        if len(new_password) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="New password must be at least 6 characters long.",
+            )
+
+        new_password_hash = PasswordHasher.hash_password(new_password)
+        updated = await self.repository.update_password(user_id, new_password_hash)
+        if not updated:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update password. Please try again.",
+            )
+
+        logger.info(f"Password updated successfully for user ID {user_id}")
+        return ChangePasswordResponse(status="ok", message="Password changed successfully.")
 
 
 auth_service = AuthService()

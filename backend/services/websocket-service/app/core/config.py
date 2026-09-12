@@ -2,16 +2,24 @@
 Configuration settings for FluxChat WebSocket Service.
 Loads dynamically from environment variables or .env file using Pydantic Settings.
 """
+from pathlib import Path
 from typing import List, Union
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BACKEND_DIR = BASE_DIR.parent.parent
 
 
 class Settings(BaseSettings):
     """Application runtime settings for WebSocket Service."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(
+            str(BASE_DIR / ".env"),
+            str(BACKEND_DIR / ".env"),
+            ".env",
+        ),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -22,8 +30,8 @@ class Settings(BaseSettings):
     PORT: int = 8005
     HOST: str = "0.0.0.0"
 
-    # MongoDB Atlas Database Configuration (Shared with other services)
-    MONGODB_URL: str = "mongodb+srv://parhijyotiswarup_db_user:JxHPTM5oQxjg9qJ9@chat.njrcbvy.mongodb.net/?appName=Chat"
+    # MongoDB Database Configuration (Loaded from .env)
+    MONGODB_URL: str = "mongodb://localhost:27017"
     MONGODB_DATABASE: str = "fluxchat_db"
 
     # JWT Authentication Configuration

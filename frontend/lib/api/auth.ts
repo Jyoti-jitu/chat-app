@@ -232,3 +232,38 @@ export async function logout(token?: string): Promise<{ message: string }> {
     removeStoredToken();
   }
 }
+
+export interface ChangePasswordPayload {
+  current_password: string;
+  new_password: string;
+}
+
+export interface ChangePasswordResponse {
+  status: string;
+  message: string;
+}
+
+/**
+ * Updates the user's password after validating current password.
+ */
+export async function changePassword(
+  payload: ChangePasswordPayload,
+  token?: string
+): Promise<ChangePasswordResponse> {
+  const authToken = token || getStoredToken();
+  const res = await fetch(`${AUTH_SERVICE_URL}/auth/change-password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: authToken ? `Bearer ${authToken}` : "",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail || "Failed to update password");
+  }
+  return data;
+}
+

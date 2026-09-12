@@ -726,7 +726,7 @@ This document serves as the master engineering blueprint and step-by-step implem
 
 - **Phase 1 (FastAPI Foundation)**: ✅ **Completed & Verified**
 - **Phase 2 (MongoDB Atlas Foundation)**: ✅ **Completed & Verified**
-  - Connected to: `mongodb+srv://parhijyotiswarup_db_user:***@chat.njrcbvy.mongodb.net/?appName=Chat`
+  - Connected to: `mongodb+srv://<db_user>:***@chat.njrcbvy.mongodb.net/?appName=Chat`
   - Health check: `{"status": "ok", "database": "connected"}`
 - **Phase 3 (Authentication Service)**: ✅ **Completed & Verified**
   - Endpoints: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`, `POST /auth/send-otp`, `POST /auth/verify-otp`

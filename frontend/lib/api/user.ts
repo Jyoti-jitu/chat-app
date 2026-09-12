@@ -43,6 +43,8 @@ export interface UserSearchResponse {
 
 export interface UpdateProfilePayload {
   name?: string;
+  username?: string;
+  email?: string;
   bio?: string;
   avatar?: string;
   phone?: string;

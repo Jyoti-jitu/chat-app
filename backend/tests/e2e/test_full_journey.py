@@ -13,9 +13,21 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import pytest
 import websockets
 
-GATEWAY_HTTP_URL = "http://127.0.0.1:8000"
-GATEWAY_WS_URL = "ws://127.0.0.1:8000/ws"
-MONGODB_URL = "mongodb+srv://parhijyotiswarup_db_user:JxHPTM5oQxjg9qJ9@chat.njrcbvy.mongodb.net/?appName=Chat"
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load backend/.env if present
+test_dir = Path(__file__).resolve().parent
+backend_dir = test_dir.parent.parent
+for env_candidate in [backend_dir / ".env", backend_dir / "services/auth-service/.env", Path(".env")]:
+    if env_candidate.exists():
+        load_dotenv(env_candidate, override=True)
+        break
+
+GATEWAY_HTTP_URL = os.getenv("GATEWAY_HTTP_URL", "http://127.0.0.1:8000")
+GATEWAY_WS_URL = os.getenv("GATEWAY_WS_URL", "ws://127.0.0.1:8000/ws")
+MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
 
 
 @pytest.mark.asyncio

@@ -19,6 +19,8 @@ from app.schemas.auth import (
     VerifyOtpRequest,
     VerifyOtpResponse,
     LoginOtpRequest,
+    ChangePasswordRequest,
+    ChangePasswordResponse,
 )
 from app.services.auth_service import auth_service
 from shared.security.rate_limit import require_rate_limit
@@ -152,3 +154,30 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     return await auth_service.get_current_user_from_token(credentials.credentials)
+
+
+@router.post(
+    "/change-password",
+    response_model=ChangePasswordResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Change Password",
+    description="Updates the user's password after validating their current password.",
+)
+async def change_password(
+    payload: ChangePasswordRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+) -> ChangePasswordResponse:
+    """Updates password for the currently authenticated user."""
+    if not credentials or not credentials.credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing Bearer access token in Authorization header.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user = await auth_service.get_current_user_from_token(credentials.credentials)
+    return await auth_service.change_password(
+        user_id=user.id,
+        current_password=payload.current_password,
+        new_password=payload.new_password,
+    )
+

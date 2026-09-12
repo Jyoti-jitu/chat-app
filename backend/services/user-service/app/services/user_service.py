@@ -35,7 +35,7 @@ class UserService:
     ) -> UserProfileResponse:
         """
         Updates fields provided in UserProfileUpdate.
-        Sanitizes input and returns updated profile.
+        Sanitizes input, checks uniqueness for username, email, phone, and returns updated profile.
         """
         update_dict = updates.model_dump(exclude_unset=True)
 
@@ -47,6 +47,39 @@ class UserService:
             update_dict["name"] = update_dict["name"].strip()
         if "bio" in update_dict and update_dict["bio"] is not None:
             update_dict["bio"] = update_dict["bio"].strip()
+
+        # Check username uniqueness if changed
+        if "username" in update_dict and update_dict["username"]:
+            clean_username = update_dict["username"].strip().lower()
+            update_dict["username"] = clean_username
+            existing = await self.repository.get_by_username(clean_username)
+            if existing and existing["id"] != user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="This username is already taken. Please choose another.",
+                )
+
+        # Check email uniqueness if changed
+        if "email" in update_dict and update_dict["email"]:
+            clean_email = update_dict["email"].strip().lower()
+            update_dict["email"] = clean_email
+            existing = await self.repository.get_by_email(clean_email)
+            if existing and existing["id"] != user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="An account with this email address already exists.",
+                )
+
+        # Check phone uniqueness if changed
+        if "phone" in update_dict and update_dict["phone"]:
+            clean_phone = update_dict["phone"].strip()
+            update_dict["phone"] = clean_phone
+            existing = await self.repository.get_by_phone(clean_phone)
+            if existing and existing["id"] != user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="This mobile number is already registered with another account.",
+                )
 
         updated_user = await self.repository.update_profile(user_id, update_dict)
         if not updated_user:

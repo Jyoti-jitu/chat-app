@@ -126,3 +126,16 @@ class LogoutResponse(BaseModel):
     """Logout acknowledgment response."""
     status: str = "ok"
     message: str = "Successfully logged out"
+
+
+class ChangePasswordRequest(BaseModel):
+    """Payload for changing the authenticated user's password."""
+    current_password: str = Field(..., min_length=1, description="Current account password")
+    new_password: str = Field(..., min_length=6, max_length=128, description="New password (min 6 characters)")
+
+
+class ChangePasswordResponse(BaseModel):
+    """Response returned upon password change."""
+    status: str = "ok"
+    message: str = "Password changed successfully."
+

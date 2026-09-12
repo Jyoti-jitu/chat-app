@@ -83,5 +83,15 @@ class AuthRepository:
         doc = await self.revoked_tokens_collection.find_one({"token": token})
         return doc is not None
 
+    async def update_password(self, user_id: str, new_password_hash: str) -> bool:
+        """Updates the password hash and updated_at timestamp for a user."""
+        if not ObjectId.is_valid(user_id):
+            return False
+        result = await self.users_collection.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$set": {"password_hash": new_password_hash, "updated_at": datetime.now(timezone.utc)}},
+        )
+        return result.modified_count > 0
+
 
 auth_repository = AuthRepository()
