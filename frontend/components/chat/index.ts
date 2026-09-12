@@ -1,13 +1,7 @@
-/**
- * Chat component exports
- * In Phase 2, this will export:
- * - ChatLayout
- * - ConversationList
- * - ConversationItem
- * - ChatHeader
- * - MessageList
- * - MessageBubble
- * - MessageInput
- * - EmptyChat
- */
-export {};
+export * from "./AttachmentCard";
+export * from "./ChatHeader";
+export * from "./ConversationItem";
+export * from "./ConversationList";
+export * from "./EmptyChat";
+export * from "./MessageBubble";
+export * from "./MessageInput";

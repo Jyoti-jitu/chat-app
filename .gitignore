@@ -50,3 +50,7 @@ env/
 .env/
 .pytest_cache/
 
+# Runtime logs & process tracking
+backend/logs/
+backend/.pids/
+*.log
