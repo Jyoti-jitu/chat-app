@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     PORT: int = 8004
     HOST: str = "0.0.0.0"
+    WS_SERVICE_URL: str = "http://localhost:8005"
 
     # MongoDB Atlas Database Configuration (Shared with other services)
     MONGODB_URL: str = "mongodb+srv://parhijyotiswarup_db_user:JxHPTM5oQxjg9qJ9@chat.njrcbvy.mongodb.net/?appName=Chat"

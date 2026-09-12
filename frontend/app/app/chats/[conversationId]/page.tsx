@@ -115,26 +115,40 @@ export default function IndividualChatPage({
   }, []);
 
   // Fetch live conversation metadata and messages
-  const fetchThreadData = useCallback(async () => {
+  const fetchThreadData = useCallback(async (silent = false) => {
     const token = getStoredToken();
     if (!token) return;
 
     let otherUserId: string | null = null;
+    let targetId = conversationId;
 
     // 1. Fetch conversation details
     if (conversationId.startsWith("c_")) {
       const recipientId = conversationId.replace(/^c_/, "");
       otherUserId = recipientId;
       try {
-        const publicProfile = await getUserPublicProfile(recipientId, token);
+        const directConv = await createOrGetDirectConversation(recipientId, token);
+        targetId = directConv.id;
         setConversation({
-          id: conversationId,
-          name: publicProfile.name,
-          avatar: publicProfile.avatar || undefined,
-          isOnline: publicProfile.is_online,
+          id: directConv.id,
+          name: directConv.name || "Direct Chat",
+          avatar: directConv.avatar || undefined,
+          isOnline: directConv.members?.some((m: any) => m.is_online) || false,
         });
+        // Transition URL to real conversation ID so socket events and routes match canonical thread
+        router.replace(`/app/chats/${directConv.id}`);
       } catch (err: any) {
-        console.warn("Could not fetch recipient profile:", err.message);
+        try {
+          const publicProfile = await getUserPublicProfile(recipientId, token);
+          setConversation({
+            id: conversationId,
+            name: publicProfile.name,
+            avatar: publicProfile.avatar || undefined,
+            isOnline: publicProfile.is_online,
+          });
+        } catch (e: any) {
+          console.warn("Could not fetch recipient profile:", e.message);
+        }
       }
     } else {
       try {
@@ -184,7 +198,7 @@ export default function IndividualChatPage({
 
     // 2. Fetch live messages
     try {
-      const res = await getMessages(conversationId, 100, undefined, token);
+      const res = await getMessages(targetId, 100, undefined, token);
       if (res.items && res.items.length > 0) {
         const mapped: Message[] = res.items.map((item) => ({
           id: item.id,
@@ -207,7 +221,14 @@ export default function IndividualChatPage({
             : "Now",
           status: item.status,
         }));
-        setMessages(mapped);
+
+        setMessages((prev) => {
+          if (prev.length === 0) return mapped;
+          const existingIds = new Set(prev.map((m) => m.id));
+          const newItems = mapped.filter((m) => !existingIds.has(m.id));
+          if (newItems.length === 0) return prev;
+          return [...prev, ...newItems];
+        });
 
         // Mark incoming unread messages as read
         for (const item of res.items) {
@@ -215,13 +236,13 @@ export default function IndividualChatPage({
             markMessageAsRead(item.id, token).catch(() => {});
           }
         }
-      } else {
+      } else if (!silent) {
         setMessages([]);
       }
     } catch (err: any) {
-      setMessages([]);
+      if (!silent) setMessages([]);
     }
-  }, [conversationId, currentUserId]);
+  }, [conversationId, currentUserId, router]);
 
   useEffect(() => {
     fetchThreadData();
@@ -237,7 +258,15 @@ export default function IndividualChatPage({
 
       const handleNewMessage = (payload: any) => {
         const msgData = payload.data || payload;
-        if (msgData.conversation_id === conversationId) {
+        if (!msgData) return;
+
+        const recipientId = conversationId.startsWith("c_") ? conversationId.replace(/^c_/, "") : null;
+        const matchesThread =
+          msgData.conversation_id === conversationId ||
+          msgData.conversation_id === conversation.id ||
+          (recipientId && (msgData.sender_id === recipientId || msgData.recipient_id === recipientId));
+
+        if (matchesThread) {
           setMessages((prev) => {
             if (prev.some((m) => m.id === msgData.id)) return prev;
             return [
@@ -265,12 +294,17 @@ export default function IndividualChatPage({
               },
             ];
           });
+
+          if (msgData.sender_id !== currentUserId && token) {
+            markMessageAsRead(msgData.id, token).catch(() => {});
+          }
         }
       };
 
       const handleUpdatedMessage = (payload: any) => {
         const msgData = payload.data || payload;
-        if (msgData.conversation_id === conversationId) {
+        if (!msgData) return;
+        if (msgData.conversation_id === conversationId || msgData.conversation_id === conversation.id) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === msgData.id ? { ...m, content: msgData.content } : m
@@ -281,7 +315,8 @@ export default function IndividualChatPage({
 
       const handleDeletedMessage = (payload: any) => {
         const msgData = payload.data || payload;
-        if (msgData.conversation_id === conversationId) {
+        if (!msgData) return;
+        if (msgData.conversation_id === conversationId || msgData.conversation_id === conversation.id) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === msgData.id
@@ -294,14 +329,19 @@ export default function IndividualChatPage({
 
       const handleTypingStart = (payload: any) => {
         const data = payload.data || payload;
-        if (data.conversation_id === conversationId && data.user_id !== currentUserId) {
+        if (!data) return;
+        if (
+          (data.conversation_id === conversationId || data.conversation_id === conversation.id) &&
+          data.user_id !== currentUserId
+        ) {
           setIsTyping(true);
         }
       };
 
       const handleTypingStop = (payload: any) => {
         const data = payload.data || payload;
-        if (data.conversation_id === conversationId) {
+        if (!data) return;
+        if (data.conversation_id === conversationId || data.conversation_id === conversation.id) {
           setIsTyping(false);
         }
       };
@@ -312,15 +352,21 @@ export default function IndividualChatPage({
       wsClient.on("typing.start", handleTypingStart);
       wsClient.on("typing.stop", handleTypingStop);
 
+      // Background polling fallback every 3 seconds to guarantee new messages arrive even if socket drops
+      const pollTimer = setInterval(() => {
+        fetchThreadData(true);
+      }, 3000);
+
       return () => {
         wsClient.off("message.new", handleNewMessage);
         wsClient.off("message.updated", handleUpdatedMessage);
         wsClient.off("message.deleted", handleDeletedMessage);
         wsClient.off("typing.start", handleTypingStart);
         wsClient.off("typing.stop", handleTypingStop);
+        clearInterval(pollTimer);
       };
     }
-  }, [fetchThreadData, conversationId, currentUserId]);
+  }, [fetchThreadData, conversationId, conversation.id, currentUserId]);
 
   const handleSendMessage = async (content: string) => {
     const token = getStoredToken();

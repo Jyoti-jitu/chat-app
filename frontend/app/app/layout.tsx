@@ -1,10 +1,12 @@
 import React from "react";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppMobileNav } from "@/components/layout/AppMobileNav";
+import { WebSocketManager } from "@/components/layout/WebSocketManager";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen w-full bg-[#FFFFFF] dark:bg-[#101614] text-[#17211D] dark:text-[#F1F5F3] overflow-hidden">
+      <WebSocketManager />
       {/* Desktop Left Sidebar */}
       <AppSidebar />
 

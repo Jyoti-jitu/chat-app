@@ -17,6 +17,7 @@ import {
   leaveConversation,
 } from "@/lib/api/chat";
 import { getContacts, ContactItem } from "@/lib/api/contact";
+import { wsClient } from "@/lib/api/websocket";
 
 export interface ConversationListProps {
   activeId?: string;
@@ -46,12 +47,12 @@ export function ConversationList({ activeId, className }: ConversationListProps)
     );
   };
 
-  const fetchConversations = useCallback(async () => {
+  const fetchConversations = useCallback(async (silent = false) => {
     const token = getAuthToken();
     if (!token) return;
 
     try {
-      setIsLoading(true);
+      if (!silent) setIsLoading(true);
 
       // Extract current user ID from token
       let myUserId = currentUserId;
@@ -140,7 +141,49 @@ export function ConversationList({ activeId, className }: ConversationListProps)
   useEffect(() => {
     fetchConversations();
     fetchContactsList();
-  }, [fetchConversations, fetchContactsList]);
+
+    const handleWsMessage = (payload: any) => {
+      const msgData = payload.data || payload;
+      if (!msgData || !msgData.conversation_id) return;
+
+      setConversations((prev) => {
+        const existingIdx = prev.findIndex((c) => c.id === msgData.conversation_id);
+        const timeFormatted = msgData.created_at
+          ? new Date(msgData.created_at).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "Now";
+
+        if (existingIdx >= 0) {
+          const updated = [...prev];
+          const conv = { ...updated[existingIdx] };
+          conv.lastMessage = msgData.content;
+          conv.lastMessageTime = timeFormatted;
+          if (activeId !== conv.id && msgData.sender_id !== currentUserId) {
+            conv.unreadCount = (conv.unreadCount || 0) + 1;
+          }
+          updated.splice(existingIdx, 1);
+          return [conv, ...updated];
+        } else {
+          fetchConversations(true);
+          return prev;
+        }
+      });
+    };
+
+    wsClient.on("message.new", handleWsMessage);
+
+    // Silent periodic refresh every 4 seconds to keep conversations completely in sync
+    const pollInterval = setInterval(() => {
+      fetchConversations(true);
+    }, 4000);
+
+    return () => {
+      wsClient.off("message.new", handleWsMessage);
+      clearInterval(pollInterval);
+    };
+  }, [fetchConversations, fetchContactsList, activeId, currentUserId]);
 
   // Auto-switch to General section if active conversation is in General
   useEffect(() => {

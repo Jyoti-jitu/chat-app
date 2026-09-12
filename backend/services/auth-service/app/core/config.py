@@ -19,11 +19,11 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
 
     # Database Configuration (Phase 2)
-    MONGODB_URL: str = "mongodb://localhost:27017"
+    MONGODB_URL: str = "mongodb+srv://parhijyotiswarup_db_user:JxHPTM5oQxjg9qJ9@chat.njrcbvy.mongodb.net/?appName=Chat"
     MONGODB_DATABASE: str = "fluxchat_db"
 
     # JWT Authentication Configuration (Phase 3)
-    JWT_SECRET: str = "fluxchat-dev-secret-key-32-chars-minimum-replace-in-production"
+    JWT_SECRET: str = "fluxchat-production-jwt-secret-key-32-chars-long-secure"
     JWT_ALGORITHM: str = "HS256"
     # Access and refresh tokens persist indefinitely until explicit logout (10 years)
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 5256000

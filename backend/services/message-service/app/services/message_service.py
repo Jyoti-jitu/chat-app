@@ -2,8 +2,10 @@
 Message Service encapsulating business logic for message creation, thread retrieval,
 author verification, soft deletion, and status transitions.
 """
-from typing import Any, Dict
+from typing import Any, Dict, List
+import httpx
 from fastapi import HTTPException, status
+from app.core.config import settings
 from app.core.logging import logger
 from app.repositories.message_repository import message_repository
 from app.schemas.message import (
@@ -21,6 +23,46 @@ class MessageService:
 
     def __init__(self):
         self.repo = message_repository
+
+    async def _dispatch_realtime_event(
+        self,
+        event_name: str,
+        event_data: dict,
+        conversation_id: str,
+        members: List[str],
+        sender_id: str,
+    ) -> None:
+        """Dispatches real-time event via Redis Pub/Sub and direct WebSocket REST bridge."""
+        # 1. Publish to Redis Pub/Sub
+        try:
+            await redis_manager.publish(
+                "fluxchat:events",
+                {
+                    "event": event_name,
+                    "data": event_data,
+                    "conversation_id": str(conversation_id),
+                    "members": members,
+                    "sender_id": str(sender_id),
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to publish {event_name} to Redis: {e}")
+
+        # 2. Direct HTTP bridge to WebSocket service (ensures delivery even without Redis server)
+        try:
+            ws_url = getattr(settings, "WS_SERVICE_URL", "http://localhost:8005").rstrip("/")
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                await client.post(
+                    f"{ws_url}/api/v1/events/broadcast",
+                    json={
+                        "event": event_name,
+                        "data": event_data,
+                        "recipient_ids": members,
+                        "exclude_user_id": str(sender_id),
+                    },
+                )
+        except Exception as e:
+            logger.debug(f"Direct WS broadcast bridge notice: {e}")
 
     def _to_response(self, doc: Dict[str, Any]) -> MessageResponse:
         """Converts raw MongoDB message document to Pydantic MessageResponse."""
@@ -111,20 +153,14 @@ class MessageService:
         )
         resp = self._to_response(created)
 
-        # Publish event to Redis Pub/Sub for instant WebSocket push
-        try:
-            await redis_manager.publish(
-                "fluxchat:events",
-                {
-                    "event": "message.new",
-                    "data": resp.model_dump(mode="json"),
-                    "conversation_id": str(conversation_id),
-                    "members": members,
-                    "sender_id": str(current_user_id),
-                },
-            )
-        except Exception as e:
-            logger.warning(f"Failed to publish message.new to Redis: {e}")
+        # Publish event to Redis Pub/Sub & WebSocket Service REST bridge
+        await self._dispatch_realtime_event(
+            "message.new",
+            resp.model_dump(mode="json"),
+            str(conversation_id),
+            members,
+            str(current_user_id),
+        )
 
         return resp
 
@@ -188,21 +224,15 @@ class MessageService:
         resp = self._to_response(updated or msg)
 
         # Broadcast edit event
-        try:
-            conv = await self.repo.get_conversation(msg["conversation_id"])
-            members = [str(m) for m in conv.get("members", [])] if conv else []
-            await redis_manager.publish(
-                "fluxchat:events",
-                {
-                    "event": "message.updated",
-                    "data": resp.model_dump(mode="json"),
-                    "conversation_id": str(msg["conversation_id"]),
-                    "members": members,
-                    "sender_id": str(current_user_id),
-                },
-            )
-        except Exception as e:
-            logger.warning(f"Failed to publish message.updated to Redis: {e}")
+        conv = await self.repo.get_conversation(msg["conversation_id"])
+        members = [str(m) for m in conv.get("members", [])] if conv else []
+        await self._dispatch_realtime_event(
+            "message.updated",
+            resp.model_dump(mode="json"),
+            str(msg["conversation_id"]),
+            members,
+            str(current_user_id),
+        )
 
         return resp
 
@@ -228,21 +258,15 @@ class MessageService:
         resp = self._to_response(deleted or msg)
 
         # Broadcast deletion event
-        try:
-            conv = await self.repo.get_conversation(msg["conversation_id"])
-            members = [str(m) for m in conv.get("members", [])] if conv else []
-            await redis_manager.publish(
-                "fluxchat:events",
-                {
-                    "event": "message.deleted",
-                    "data": resp.model_dump(mode="json"),
-                    "conversation_id": str(msg["conversation_id"]),
-                    "members": members,
-                    "sender_id": str(current_user_id),
-                },
-            )
-        except Exception as e:
-            logger.warning(f"Failed to publish message.deleted to Redis: {e}")
+        conv = await self.repo.get_conversation(msg["conversation_id"])
+        members = [str(m) for m in conv.get("members", [])] if conv else []
+        await self._dispatch_realtime_event(
+            "message.deleted",
+            resp.model_dump(mode="json"),
+            str(msg["conversation_id"]),
+            members,
+            str(current_user_id),
+        )
 
         return resp
 
@@ -267,23 +291,17 @@ class MessageService:
         resp = self._to_response(updated or msg)
 
         # Broadcast read receipt event
-        try:
-            await redis_manager.publish(
-                "fluxchat:events",
-                {
-                    "event": "message.read",
-                    "data": {
-                        "message_id": message_id,
-                        "conversation_id": str(msg["conversation_id"]),
-                        "reader_id": str(current_user_id),
-                    },
-                    "conversation_id": str(msg["conversation_id"]),
-                    "members": members,
-                    "sender_id": str(current_user_id),
-                },
-            )
-        except Exception as e:
-            logger.warning(f"Failed to publish message.read to Redis: {e}")
+        await self._dispatch_realtime_event(
+            "message.read",
+            {
+                "message_id": message_id,
+                "conversation_id": str(msg["conversation_id"]),
+                "reader_id": str(current_user_id),
+            },
+            str(msg["conversation_id"]),
+            members,
+            str(current_user_id),
+        )
 
         return resp
 
