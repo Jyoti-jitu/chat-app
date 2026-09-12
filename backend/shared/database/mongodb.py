@@ -25,15 +25,28 @@ class MongoDBManager:
         self._db_name = database_name
         logger.info(f"Connecting to MongoDB at {mongodb_url} [database: {database_name}]...")
         try:
+            client_kwargs = {
+                "serverSelectionTimeoutMS": 8000,
+                "connectTimeoutMS": 8000,
+            }
+
+            # Enable certifi CA bundle for Atlas SRV / TLS connections
+            if "mongodb+srv" in mongodb_url or "ssl=true" in mongodb_url.lower() or "tls=true" in mongodb_url.lower():
+                try:
+                    import certifi
+                    client_kwargs["tlsCAFile"] = certifi.where()
+                except ImportError:
+                    pass
+
             self.client = AsyncIOMotorClient(
                 mongodb_url,
-                serverSelectionTimeoutMS=5000,
-                connectTimeoutMS=5000,
+                **client_kwargs
             )
             self.db = self.client[database_name]
             # Validate connection with admin ping command
             await self.client.admin.command("ping")
             logger.info("Successfully established and validated MongoDB connection.")
+
         except (ConnectionFailure, ServerSelectionTimeoutError) as e:
             logger.error(f"Failed to connect to MongoDB at {mongodb_url}: {e}")
             raise e
