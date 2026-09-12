@@ -362,17 +362,20 @@ This document serves as the master engineering blueprint and step-by-step implem
 ---
 
 ### Phase 10 — Frontend REST Integration
+- **Status**: ✅ **COMPLETED & VERIFIED**
 - **Objective**: Sequentially swap out frontend mock data with live FastAPI backend calls.
 - **Sequence**:
-  1. **Auth Integration**: Update Next.js `lib/api/auth.ts` to call `/api/v1/auth/login` and `/api/v1/auth/register`. Store JWT token in secure cookies/localStorage.
-  2. **Profile & Settings**: Fetch `/api/v1/users/me` on dashboard load.
-  3. **Contacts**: Wire `/api/v1/contacts` to Contacts view (`app/app/contacts/page.tsx`).
-  4. **Chat List**: Wire `/api/v1/conversations` to Conversation list sidebar.
-  5. **Message Thread**: Wire `/api/v1/conversations/{id}/messages` to active chat view.
+  1. **Auth Integration**: Created Next.js `frontend/lib/api/auth.ts` with typed helpers for `/auth/login`, `/auth/login-otp`, `/auth/register`, `/auth/send-otp`, and `/auth/verify-otp`. Stores JWT access tokens securely in `localStorage` (`fluxchat_access_token`).
+  2. **Profile & Settings**: Wired `frontend/lib/api/user.ts` (`/api/v1/users/me` and `/api/v1/users/search`) to dashboard profile views and settings pages.
+  3. **Contacts**: Wired `frontend/lib/api/contact.ts` (`/api/v1/contacts` and `/api/v1/contacts/requests`) to Contacts view (`app/app/contacts/page.tsx`) and Requests view (`app/app/requests/page.tsx`).
+  4. **Chat List**: Wired `frontend/lib/api/chat.ts` (`/api/v1/conversations`) to `ConversationList.tsx` sidebar with dynamic partner labels, avatars, and direct/group creation dialogs.
+  5. **Message Thread**: Wired `frontend/lib/api/message.ts` (`/api/v1/conversations/{id}/messages`) to active chat view (`app/app/chats/[conversationId]/page.tsx`) with cursor pagination, optimistic dispatch, soft deletion, and read status.
+
 
 ---
 
 ### Phase 11 — WebSocket Service
+- **Status**: ✅ **COMPLETED & VERIFIED**
 - **Objective**: Real-time bidirectional socket connections with handshake authentication.
 - **Architecture**:
   ```text
@@ -388,10 +391,19 @@ This document serves as the master engineering blueprint and step-by-step implem
   ```
 - **ConnectionManager**:
   - Tracks `active_connections: Dict[str, Set[WebSocket]]` to support multiple tabs/devices per user.
+- **Endpoints in WebSocket Service (`http://localhost:8005`)**:
+  - `WS   /ws?token={jwt}` — Authenticated real-time WebSocket connection.
+  - `GET  /health` — Microservice health check with active user and connection counts.
+  - `POST /api/v1/events/broadcast` — Cross-service REST broadcast bridge.
+  - `GET  /api/v1/presence/online` — List active online users.
+  - `GET  /api/v1/presence/{user_id}` — Query specific user's live presence status.
+- **Automated Tests**: `tests/test_websocket.py` with 100% pass rate.
+- **Daemon Launcher**: `backend/run_websocket_service.sh` active on port 8005.
 
 ---
 
 ### Phase 12 — WebSocket Event Protocol
+- **Status**: ✅ **COMPLETED & VERIFIED**
 - **Objective**: Strongly-typed event protocol for all socket communication.
 - **Standardized Envelope**:
   ```json
@@ -406,14 +418,16 @@ This document serves as the master engineering blueprint and step-by-step implem
     }
   }
   ```
-- **Event Catalog**:
-  - `message.new` — Broadcast newly sent message to all room members.
-  - `message.updated` — Broadcast message edit.
-  - `message.deleted` — Broadcast message deletion.
-  - `message.delivered` — Delivery receipt acknowledgment.
-  - `message.read` — Read receipt update.
-  - `typing.start` / `typing.stop` — Ephemeral typing notification.
-  - `user.online` / `user.offline` — Presence updates.
+- **Implemented Event Catalog**:
+  - `connection.ack` — Sent to client upon handshake validation with online user roster.
+  - `ping` / `pong` — Heartbeat keep-alive exchange every 25 seconds.
+  - `message.new` — Broadcast newly sent message to conversation participants.
+  - `message.updated` — Broadcast edited message content.
+  - `message.deleted` — Broadcast soft deletion placeholder.
+  - `message.read` — Read receipt updates.
+  - `typing.start` / `typing.stop` — Ephemeral typing notification relay.
+  - `user.online` / `user.offline` — Presence status notifications.
+- **Frontend Client**: `frontend/lib/api/websocket.ts` with exponential backoff, auto-reconnection, and typed event listeners.
 
 ---
 
