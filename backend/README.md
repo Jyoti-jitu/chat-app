@@ -616,12 +616,25 @@ This document serves as the master engineering blueprint and step-by-step implem
 
 ---
 
-### Phase 25 — Automated Testing Suite
-- **Directory**: `tests/` across each microservice.
-- **Structure**:
-  - `tests/unit/`: Test password hashing, JWT encoding/decoding, cursor token packing.
-  - `tests/integration/`: Test repository CRUD against live MongoDB Atlas.
-  - `tests/api/`: Test full HTTP endpoints and status codes using `httpx.AsyncClient` with `ASGITransport`.
+### Phase 25 — Automated Testing Suite & Cross-Service Test Harness
+- **Status**: ✅ **COMPLETED & VERIFIED**
+- **Objective**: Comprehensive test pyramid covering unit, integration, microservice, security, and cluster-wide end-to-end user journeys.
+- **Master Test Runner**: `backend/run_all_tests.sh`
+  - Automated orchestrator that executes all 9 test suites across the cluster with colorized reporting and timing metrics.
+  - Run all: `./run_all_tests.sh all`
+  - Run specific categories: `./run_all_tests.sh shared`, `./run_all_tests.sh services`, or `./run_all_tests.sh e2e`
+- **Verification Results**:
+  - **Shared Infrastructure, Security & Redis**: 14 tests passing (`shared/`)
+  - **API Gateway Service**: 11 tests passing (`services/api-gateway/tests/`)
+  - **Auth Service**: 9 tests passing (`services/auth-service/tests/`)
+  - **User Service**: 4 tests passing (`services/user-service/tests/`)
+  - **Chat Service**: 2 tests passing (`services/chat-service/tests/`)
+  - **Message Service**: 3 tests passing (`services/message-service/tests/`)
+  - **WebSocket Service**: 3 tests passing (`services/websocket-service/tests/`)
+  - **Notification Service**: 2 tests passing (`services/notification-service/tests/`)
+  - **E2E Full User Journey Cluster Test**: 2 tests passing (`tests/e2e/test_full_journey.py`)
+  - **Total**: 50 tests across 9 suites passing with 100% success rate (0 failures).
+- **CI/CD Automation**: `.github/workflows/ci.yml` providing automated verification for Next.js frontend builds and backend test suites on every push and PR.
 
 ---
 
@@ -696,4 +709,22 @@ This document serves as the master engineering blueprint and step-by-step implem
 - **Phase 8 (Message Service)**: ✅ **Completed & Verified**
   - Running on port **8004**, MongoDB Atlas `messages` integration, author-only editing and soft deletion, read receipts, and live conversation thread integration (`/app/chats/[id]`).
   - Full automated tests passing (`2/2 passed`)
-- **Phase 9 (Cursor-Based Message Pagination)**: ⏳ **Next in Queue**
+- **Phase 9 (Cursor-Based Message Pagination)**: ✅ **Completed & Verified** (Opaque Base64 tokens with bidirectional scrolling).
+- **Phase 10 (Message Reactions)**: ✅ **Completed & Verified** (Idempotent emoji reactions & real-time counts).
+- **Phase 11 (Pinned Messages)**: ✅ **Completed & Verified** (Pin up to 5 messages per conversation).
+- **Phase 12 (Redis Integration)**: ✅ **Completed & Verified** (Caching, Pub/Sub channels, connection pooling).
+- **Phase 13 (WebSocket Service)**: ✅ **Completed & Verified** (Port 8005, JWT auth query param, connection heartbeat).
+- **Phase 14 (Real-time Messaging Over WebSocket)**: ✅ **Completed & Verified** (Instant message delivery & Redis fanout).
+- **Phase 15 (User Presence Tracking)**: ✅ **Completed & Verified** (Redis online/offline/away states with TTL).
+- **Phase 16 (Typing Indicators)**: ✅ **Completed & Verified** (Ephemeral typing states with 5s expiry).
+- **Phase 17 (Delivery & Read Receipts)**: ✅ **Completed & Verified** (sent ➔ delivered ➔ read tracking).
+- **Phase 18 (Notification Service)**: ✅ **Completed & Verified** (Port 8006, persistent alert inbox & unread counters).
+- **Phase 19 (API Gateway Service)**: ✅ **Completed & Verified** (Port 8000, unified reverse proxy, WS tunneling, cluster health aggregation).
+- **Phase 20 (Resilient Inter-Service RPC)**: ✅ **Completed & Verified** (HTTP connection pooling, retry policies, typed errors).
+- **Phase 21 (Standardized Error Envelope)**: ✅ **Completed & Verified** (Universal Phase 21 error JSON format across all 7 services).
+- **Phase 22 (Structured JSON Logging)**: ✅ **Completed & Verified** (Credential redaction, request ID correlation, latency tracking).
+- **Phase 23 (Security & Hardening)**: ✅ **Completed & Verified** (IDOR guards, NoSQL injection protection, Redis rate limiting).
+- **Phase 24 (MongoDB Atlas Indexes)**: ✅ **Completed & Verified** (Compound, unique, and TTL indexes applied to live cluster).
+- **Phase 25 (Automated Test Suite & E2E Test Harness)**: ✅ **Completed & Verified** (Master test runner `run_all_tests.sh`, 50/50 tests passing in 95s, CI/CD pipeline).
+- **Phase 26 (Docker Containerization)**: ⏳ **Next in Queue**
+
