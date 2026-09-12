@@ -71,33 +71,37 @@ chat-app/
 
 ## ⚡ Getting Started
 
-### Prerequisites
+> 📘 **For the comprehensive, step-by-step startup, environment configuration, and troubleshooting guide, please see [RUNNING.md](RUNNING.md).**
 
-- Node.js 18+ or 20+
-- npm, pnpm, or yarn
+### Quick Start
 
-### Installation
-
-1. Clone the repository:
+1. **Clone the repository**:
    ```bash
    git clone https://github.com/Jyoti-jitu/chat-app.git
-   cd chat-app/frontend
+   cd chat-app
    ```
 
-2. Install dependencies:
+2. **Start all 7 backend microservices** (API Gateway, Auth, User, Chat, Message, WebSocket, Notification):
    ```bash
+   ./backend/start_all_backend.sh start
+   ```
+
+3. **Start the Next.js Frontend**:
+   ```bash
+   cd frontend
    npm install
-   ```
-
-3. Start the development server:
-   ```bash
    npm run dev
    ```
 
-4. Open your browser and navigate to:
-   ```text
-   http://localhost:3000
-   ```
+4. **Access the application**:
+   - **Frontend App**: [http://localhost:3000](http://localhost:3000)
+   - **API Gateway Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+   - **Cluster Health Probes**: [http://localhost:8000/health](http://localhost:8000/health)
+
+To stop backend services:
+```bash
+./backend/start_all_backend.sh stop
+```
 
 ---
 
