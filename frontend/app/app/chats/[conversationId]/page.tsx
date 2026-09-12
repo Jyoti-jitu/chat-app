@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, use } from "react";
+import React, { useState, useRef, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
 import { ConversationList } from "@/components/chat/ConversationList";
 import { ChatHeader } from "@/components/chat/ChatHeader";
@@ -11,7 +11,14 @@ import { Button } from "@/components/ui/Button";
 import { mockConversations } from "@/lib/mock/conversations";
 import { initialMessages } from "@/lib/mock/messages";
 import { Message } from "@/types/message";
-import { Trash2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Trash2, AlertTriangle, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  getMessages,
+  sendMessage,
+  deleteMessage,
+  markMessageAsRead,
+} from "@/lib/api/message";
+import { getConversationDetails, leaveConversation } from "@/lib/api/chat";
 
 export default function IndividualChatPage({
   params,
@@ -22,9 +29,22 @@ export default function IndividualChatPage({
   const resolvedParams = use(params);
   const conversationId = resolvedParams.conversationId;
 
-  const conversation =
-    mockConversations.find((c) => c.id === conversationId) ||
-    mockConversations[0];
+  const [currentUserId, setCurrentUserId] = useState<string>("u_me");
+  const [conversation, setConversation] = useState<{
+    id: string;
+    name: string;
+    avatar?: string;
+    isOnline?: boolean;
+  }>(() => {
+    const fallback =
+      mockConversations.find((c) => c.id === conversationId) || mockConversations[0];
+    return {
+      id: fallback.id,
+      name: fallback.name,
+      avatar: fallback.avatar,
+      isOnline: fallback.isOnline,
+    };
+  });
 
   const [messages, setMessages] = useState<Message[]>(
     initialMessages[conversationId] || initialMessages["c1"] || []
@@ -34,8 +54,15 @@ export default function IndividualChatPage({
   const [isDeleteChatModalOpen, setIsDeleteChatModalOpen] = useState(false);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error">("success");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    setToastMessage(msg);
+    setToastType(type);
+    setTimeout(() => setToastMessage(""), 3000);
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -45,67 +72,252 @@ export default function IndividualChatPage({
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = (content: string) => {
-    const newMessage: Message = {
-      id: `m_${Date.now()}`,
-      conversationId: conversation.id,
-      senderId: "u_me",
-      content,
-      type: "text",
-      createdAt: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      status: "delivered",
-    };
+  // Decode current user ID from token
+  useEffect(() => {
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    if (token) {
+      try {
+        const parts = token.split(".");
+        if (parts.length === 3) {
+          const payload = JSON.parse(atob(parts[1]));
+          if (payload.sub) setCurrentUserId(payload.sub);
+        }
+      } catch (e) {
+        console.warn("Could not decode user token sub:", e);
+      }
+    }
+  }, []);
 
-    setMessages((prev) => [...prev, newMessage]);
+  // Fetch live conversation metadata and messages
+  const fetchThreadData = useCallback(async () => {
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    if (!token) return;
 
-    // Mock auto-read receipt update after 1 second
-    setTimeout(() => {
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === newMessage.id ? { ...msg, status: "read" } : msg
-        )
-      );
-    }, 1200);
+    // 1. Fetch conversation details
+    if (!conversationId.startsWith("c1") && !conversationId.startsWith("c2") && !conversationId.startsWith("c3")) {
+      try {
+        const convDetails = await getConversationDetails(conversationId, token);
+        setConversation({
+          id: convDetails.id,
+          name: convDetails.name || (convDetails.type === "group" ? "Group Chat" : "Direct Chat"),
+          avatar: convDetails.avatar || undefined,
+          isOnline: convDetails.members.some((m) => m.is_online),
+        });
+      } catch (err: any) {
+        console.warn("Could not fetch conversation details:", err.message);
+      }
+    }
+
+    // 2. Fetch live messages
+    try {
+      const res = await getMessages(conversationId, 100, 0, token);
+      if (res.items && res.items.length > 0) {
+        const mapped: Message[] = res.items.map((item) => ({
+          id: item.id,
+          conversationId: item.conversation_id,
+          senderId: item.sender_id,
+          content: item.content,
+          type: item.type as "text" | "file",
+          attachment: item.attachment
+            ? {
+                name: item.attachment.name,
+                size: item.attachment.size,
+                type: "file",
+              }
+            : undefined,
+          createdAt: item.created_at
+            ? new Date(item.created_at).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : "Now",
+          status: item.status,
+        }));
+        setMessages(mapped);
+
+        // Mark incoming unread messages as read
+        for (const item of res.items) {
+          if (item.sender_id !== currentUserId && item.status !== "read") {
+            markMessageAsRead(item.id, token).catch(() => {});
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn("Using fallback messages for conversation:", err.message);
+    }
+  }, [conversationId, currentUserId]);
+
+  useEffect(() => {
+    fetchThreadData();
+  }, [fetchThreadData]);
+
+  const handleSendMessage = async (content: string) => {
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+
+    if (token && !conversationId.startsWith("c1") && !conversationId.startsWith("c2")) {
+      try {
+        const created = await sendMessage(
+          conversationId,
+          { content: content.trim(), type: "text" },
+          token
+        );
+        const newMsg: Message = {
+          id: created.id,
+          conversationId: created.conversation_id,
+          senderId: created.sender_id,
+          content: created.content,
+          type: "text",
+          createdAt: created.created_at
+            ? new Date(created.created_at).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : "Now",
+          status: created.status,
+        };
+        setMessages((prev) => [...prev, newMsg]);
+      } catch (err: any) {
+        showToast(err.message || "Failed to send message", "error");
+      }
+    } else {
+      // Local demo fallback
+      const newMessage: Message = {
+        id: `m_${Date.now()}`,
+        conversationId: conversation.id,
+        senderId: currentUserId,
+        content,
+        type: "text",
+        createdAt: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        status: "delivered",
+      };
+
+      setMessages((prev) => [...prev, newMessage]);
+
+      setTimeout(() => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === newMessage.id ? { ...msg, status: "read" } : msg
+          )
+        );
+      }, 1200);
+    }
   };
 
-  const handleSendAttachment = (file: { name: string; size: string; type: "file" }) => {
-    const attachmentMessage: Message = {
-      id: `m_${Date.now()}`,
-      conversationId: conversation.id,
-      senderId: "u_me",
-      content: "Shared a project file",
-      type: "file",
-      attachment: {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-      },
-      createdAt: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      status: "delivered",
-    };
-    setMessages((prev) => [...prev, attachmentMessage]);
+  const handleSendAttachment = async (file: {
+    name: string;
+    size: string;
+    type: "file";
+  }) => {
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+
+    if (token && !conversationId.startsWith("c1") && !conversationId.startsWith("c2")) {
+      try {
+        const created = await sendMessage(
+          conversationId,
+          {
+            content: file.name,
+            type: "file",
+            attachment: {
+              name: file.name,
+              size: file.size,
+              url: "#",
+              type: "file",
+            },
+          },
+          token
+        );
+        const newMsg: Message = {
+          id: created.id,
+          conversationId: created.conversation_id,
+          senderId: created.sender_id,
+          content: created.content,
+          type: "file",
+          attachment: {
+            name: file.name,
+            size: file.size,
+            type: "file",
+          },
+          createdAt: created.created_at
+            ? new Date(created.created_at).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : "Now",
+          status: created.status,
+        };
+        setMessages((prev) => [...prev, newMsg]);
+      } catch (err: any) {
+        showToast(err.message || "Failed to upload file", "error");
+      }
+    } else {
+      const attachmentMessage: Message = {
+        id: `m_${Date.now()}`,
+        conversationId: conversation.id,
+        senderId: currentUserId,
+        content: "Shared a project file",
+        type: "file",
+        attachment: {
+          name: file.name,
+          size: file.size,
+          type: file.type,
+        },
+        createdAt: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        status: "delivered",
+      };
+      setMessages((prev) => [...prev, attachmentMessage]);
+    }
   };
 
-  const handleDeleteMessage = (id: string) => {
-    setMessages((prev) => prev.filter((m) => m.id !== id));
-    setToastMessage("Message deleted");
-    setTimeout(() => setToastMessage(""), 2500);
+  const handleDeleteMessage = async (id: string) => {
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+
+    if (token && !id.startsWith("m_")) {
+      try {
+        await deleteMessage(id, token);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === id
+              ? { ...m, content: "This message was deleted" }
+              : m
+          )
+        );
+        showToast("Message deleted");
+      } catch (err: any) {
+        showToast(err.message || "Failed to delete message", "error");
+      }
+    } else {
+      setMessages((prev) => prev.filter((m) => m.id !== id));
+      showToast("Message deleted");
+    }
   };
 
   const handleConfirmClearMessages = () => {
     setMessages([]);
     setIsClearModalOpen(false);
-    setToastMessage("Chat history cleared");
-    setTimeout(() => setToastMessage(""), 2500);
+    showToast("Chat history cleared");
   };
 
-  const handleConfirmDeleteChat = () => {
+  const handleConfirmDeleteChat = async () => {
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    if (token && !conversationId.startsWith("c1") && !conversationId.startsWith("c2")) {
+      try {
+        await leaveConversation(conversationId, token);
+      } catch (err: any) {
+        console.warn("Could not leave conversation on backend:", err.message);
+      }
+    }
     setIsDeleteChatModalOpen(false);
     router.push("/app/chats");
   };
@@ -122,8 +334,18 @@ export default function IndividualChatPage({
       <div className="flex-1 flex flex-col h-full bg-[#FFFFFF] dark:bg-[#101614] overflow-hidden transition-colors relative">
         {/* Toast notification */}
         {toastMessage && (
-          <div className="absolute top-20 right-6 z-40 p-3 rounded-xl bg-[var(--primary-light)] text-[var(--primary)] text-xs font-semibold flex items-center gap-2 shadow-flux-md animate-in fade-in">
-            <CheckCircle2 className="w-4 h-4" />
+          <div
+            className={`absolute top-20 right-6 z-40 p-3 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-flux-md animate-in fade-in ${
+              toastType === "error"
+                ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                : "bg-[var(--primary-light)] text-[var(--primary)] border border-[var(--primary)]/20"
+            }`}
+          >
+            {toastType === "error" ? (
+              <AlertCircle className="w-4 h-4 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+            )}
             <span>{toastMessage}</span>
           </div>
         )}
@@ -151,13 +373,18 @@ export default function IndividualChatPage({
               <MessageBubble
                 key={message.id}
                 message={message}
-                isMe={message.senderId === "u_me"}
+                isMe={
+                  message.senderId === currentUserId ||
+                  message.senderId === "u_me"
+                }
                 onDelete={handleDeleteMessage}
               />
             ))
           ) : (
             <div className="p-8 text-center text-xs text-[#66736D] dark:text-[#8E9C95] space-y-1">
-              <p className="font-semibold text-[#17211D] dark:text-[#F1F5F3]">No messages here yet</p>
+              <p className="font-semibold text-[#17211D] dark:text-[#F1F5F3]">
+                No messages here yet
+              </p>
               <p>Send a message below to start the conversation.</p>
             </div>
           )}

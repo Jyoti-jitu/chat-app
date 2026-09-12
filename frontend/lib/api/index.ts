@@ -13,4 +13,5 @@ export const API_BASE_URL =
 export * from "./user";
 export * from "./contact";
 export * from "./chat";
+export * from "./message";
 

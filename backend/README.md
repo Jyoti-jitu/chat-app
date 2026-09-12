@@ -285,6 +285,7 @@ This document serves as the master engineering blueprint and step-by-step implem
 ---
 
 ### Phase 8 — Message Service
+- **Status**: ✅ **COMPLETED & VERIFIED**
 - **Objective**: Full message persistence, editing, soft deletion, and status tracking.
 - **Architecture**:
   ```text
@@ -309,16 +310,20 @@ This document serves as the master engineering blueprint and step-by-step implem
      }
      ```
   2. Implement `MessageRepository`:
-     - `create_message(data)`
-     - `get_messages_by_conversation(conv_id, limit, cursor)`
-     - `update_message(msg_id, sender_id, new_content)`
-     - `soft_delete_message(msg_id, sender_id)`
-  3. Endpoints:
-     - `POST   /api/v1/conversations/{id}/messages` — Send message (verifies caller is a conversation member).
+     - `create_message(data)`: Persists message with timestamp and attachments.
+     - `get_messages_by_conversation(conv_id, limit, skip)`: Returns messages in chronological thread order.
+     - `edit_message(msg_id, new_content)`: Updates content and sets `edited: true`.
+     - `soft_delete_message(msg_id)`: Replaces content with placeholder and sets `deleted: true`.
+     - `mark_as_read(msg_id)`: Updates status to "read".
+     - `update_conversation_last_message()`: Keeps conversation preview synchronized.
+  3. Implemented Endpoints in Message Service (`http://localhost:8004`):
+     - `POST   /api/v1/conversations/{id}/messages` — Send message (verifies caller is conversation member).
      - `GET    /api/v1/conversations/{id}/messages` — Retrieve conversation message thread.
      - `PATCH  /api/v1/messages/{id}` — Edit message (author only, sets `edited: true`).
      - `DELETE /api/v1/messages/{id}` — Soft delete (author only, replaces content with "This message was deleted").
      - `POST   /api/v1/messages/{id}/read` — Mark message as read.
+  4. Frontend integration: API client in `frontend/lib/api/message.ts`, live UI wiring in `frontend/app/app/chats/[conversationId]/page.tsx` with optimistic dispatch, thread sync, and read receipts.
+  5. Automated test suite: `tests/test_messages.py` passing with 100% success.
 
 ---
 
@@ -626,4 +631,7 @@ This document serves as the master engineering blueprint and step-by-step implem
 - **Phase 7 (Chat & Conversation Service)**: ✅ **Completed & Verified**
   - Running on port **8003**, MongoDB Atlas `conversations` integration, direct 1:1 chat deduplication, group conversation channels, member management, and frontend conversation sidebar integration (`/app/chats`).
   - Full automated tests passing (`2/2 passed`)
-- **Phase 8 (Message Service)**: ⏳ **Next in Queue**
+- **Phase 8 (Message Service)**: ✅ **Completed & Verified**
+  - Running on port **8004**, MongoDB Atlas `messages` integration, author-only editing and soft deletion, read receipts, and live conversation thread integration (`/app/chats/[id]`).
+  - Full automated tests passing (`2/2 passed`)
+- **Phase 9 (Cursor-Based Message Pagination)**: ⏳ **Next in Queue**
