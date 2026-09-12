@@ -243,6 +243,7 @@ This document serves as the master engineering blueprint and step-by-step implem
 ---
 
 ### Phase 7 — Chat & Conversation Service
+- **Status**: ✅ **COMPLETED & VERIFIED**
 - **Objective**: Conversation management for direct (1:1) and group channels.
 - **Architecture**:
   ```text
@@ -265,18 +266,21 @@ This document serves as the master engineering blueprint and step-by-step implem
      }
      ```
   2. Implement `ConversationRepository`:
-     - `find_direct_conversation(user_a, user_b)`: Avoid duplicate direct chats between two users.
-     - `find_user_conversations(user_id)`: Index `{ members: 1, updated_at: -1 }`.
-     - `create_conversation()`, `add_member()`, `remove_member()`.
-  3. Endpoints:
-     - `POST   /api/v1/conversations` — Start 1:1 chat or create group.
-     - `GET    /api/v1/conversations` — List conversations current user is a member of.
-     - `GET    /api/v1/conversations/{id}` — Detailed conversation data with member list.
+     - `find_direct_conversation(user_a, user_b)`: Avoids duplicate direct chats between two users.
+     - `find_user_conversations(user_id)`: Queries `{ members: user_id }` sorted by `{ updated_at: -1 }`.
+     - `create_conversation()`, `add_members()`, `remove_member()`, `update_group_info()`, `delete_conversation()`.
+     - `get_users_profiles()`: Batch hydrates participant public profiles.
+  3. Implemented Endpoints in Chat Service (`http://localhost:8003`):
+     - `POST   /api/v1/conversations/direct` — Start or retrieve 1:1 direct chat with duplicate prevention.
+     - `POST   /api/v1/conversations/group` — Create group conversation with title, members, and admin role.
+     - `GET    /api/v1/conversations` — List conversations current user is a member of with dynamic partner titles.
+     - `GET    /api/v1/conversations/{id}` — Detailed conversation data with member list and IDOR protection.
      - `PATCH  /api/v1/conversations/{id}` — Update group name or avatar (Admin only).
-     - `DELETE /api/v1/conversations/{id}` — Delete group (Admin only) or leave chat.
      - `POST   /api/v1/conversations/{id}/members` — Add members to group.
      - `DELETE /api/v1/conversations/{id}/members/{user_id}` — Remove member from group (Admin only).
      - `POST   /api/v1/conversations/{id}/leave` — Voluntarily leave conversation.
+  4. Frontend integration: API client in `frontend/lib/api/chat.ts`, live UI wiring in `frontend/components/chat/ConversationList.tsx` with direct message and group creation modals.
+  5. Automated test suite: `tests/test_conversations.py` passing with 100% success.
 
 ---
 
@@ -619,4 +623,7 @@ This document serves as the master engineering blueprint and step-by-step implem
 - **Phase 6 (Contacts Management)**: ✅ **Completed & Verified**
   - Bidirectional connection requests (`POST /api/v1/contacts/requests`), accept/reject/cancel lifecycles, roster retrieval (`GET /api/v1/contacts`), contact removal (`DELETE /api/v1/contacts/{id}`), frontend API client and live UI pages (`/app/contacts`, `/app/requests`).
   - Full automated tests passing (`4/4 passed`)
-- **Phase 7 (Chat & Conversation Service)**: ⏳ **Next in Queue**
+- **Phase 7 (Chat & Conversation Service)**: ✅ **Completed & Verified**
+  - Running on port **8003**, MongoDB Atlas `conversations` integration, direct 1:1 chat deduplication, group conversation channels, member management, and frontend conversation sidebar integration (`/app/chats`).
+  - Full automated tests passing (`2/2 passed`)
+- **Phase 8 (Message Service)**: ⏳ **Next in Queue**
