@@ -192,3 +192,115 @@ async def test_message_lifecycle():
         await db.conversations.delete_one({"_id": ObjectId(conv_id)})
         if msg_id:
             await db.messages.delete_many({"conversation_id": conv_id})
+
+
+@pytest.mark.asyncio
+async def test_cursor_pagination():
+    """Verifies multi-page cursor traversal backwards in time without duplicate or skipped messages."""
+    db = db_manager.get_database()
+    suffix = int(time.time() * 1000)
+
+    # 1. Create test user and conversation
+    user = {
+        "name": f"Paginator {suffix}",
+        "username": f"paginator_{suffix}",
+        "email": f"paginator_{suffix}@test.io",
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc),
+    }
+    inserted_user = await db.users.insert_one(user)
+    user_id = str(inserted_user.inserted_id)
+
+    conv_data = {
+        "type": "direct",
+        "members": [user_id, "other_user"],
+        "admins": [user_id],
+        "created_by": user_id,
+        "unread_count": 0,
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    inserted_conv = await db.conversations.insert_one(conv_data)
+    conv_id = str(inserted_conv.inserted_id)
+
+    # 2. Insert 7 sequential messages with distinct timestamps
+    base_time = time.time() - 700
+    messages_inserted = []
+    for i in range(7):
+        msg_time = datetime.fromtimestamp(base_time + (i * 50), tz=timezone.utc)
+        doc = {
+            "conversation_id": conv_id,
+            "sender_id": user_id,
+            "content": f"Message number {i}",
+            "type": "text",
+            "status": "sent",
+            "edited": False,
+            "deleted": False,
+            "created_at": msg_time,
+            "updated_at": msg_time,
+        }
+        res = await db.messages.insert_one(doc)
+        doc["id"] = str(res.inserted_id)
+        messages_inserted.append(doc)
+
+    token = generate_test_token(user_id, user["email"], user["username"])
+    headers = {"Authorization": f"Bearer {token}"}
+    transport = ASGITransport(app=app)
+
+    try:
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            # Batch 1: fetch latest 3 messages (should be messages 4, 5, 6)
+            b1 = await ac.get(
+                f"/api/v1/conversations/{conv_id}/messages?limit=3",
+                headers=headers,
+            )
+            assert b1.status_code == 200
+            data1 = b1.json()
+            assert len(data1["items"]) == 3
+            assert data1["has_more"] is True
+            assert data1["next_cursor"] is not None
+            # Verified chronological order in response
+            assert data1["items"][0]["content"] == "Message number 4"
+            assert data1["items"][2]["content"] == "Message number 6"
+
+            # Batch 2: fetch next 3 messages using next_cursor (should be messages 1, 2, 3)
+            cursor1 = data1["next_cursor"]
+            b2 = await ac.get(
+                f"/api/v1/conversations/{conv_id}/messages?limit=3&cursor={cursor1}",
+                headers=headers,
+            )
+            assert b2.status_code == 200
+            data2 = b2.json()
+            assert len(data2["items"]) == 3
+            assert data2["has_more"] is True
+            assert data2["next_cursor"] is not None
+            assert data2["items"][0]["content"] == "Message number 1"
+            assert data2["items"][2]["content"] == "Message number 3"
+
+            # Batch 3: fetch remaining messages (should be message 0)
+            cursor2 = data2["next_cursor"]
+            b3 = await ac.get(
+                f"/api/v1/conversations/{conv_id}/messages?limit=3&cursor={cursor2}",
+                headers=headers,
+            )
+            assert b3.status_code == 200
+            data3 = b3.json()
+            assert len(data3["items"]) == 1
+            assert data3["has_more"] is False
+            assert data3["next_cursor"] is None
+            assert data3["items"][0]["content"] == "Message number 0"
+
+            # Verify no duplicates across all batches
+            all_ids = (
+                [m["id"] for m in data1["items"]]
+                + [m["id"] for m in data2["items"]]
+                + [m["id"] for m in data3["items"]]
+            )
+            assert len(all_ids) == 7
+            assert len(set(all_ids)) == 7
+
+    finally:
+        # Cleanup
+        await db.users.delete_one({"_id": ObjectId(user_id)})
+        await db.conversations.delete_one({"_id": ObjectId(conv_id)})
+        await db.messages.delete_many({"conversation_id": conv_id})

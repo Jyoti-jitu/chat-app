@@ -328,6 +328,7 @@ This document serves as the master engineering blueprint and step-by-step implem
 ---
 
 ### Phase 9 — Cursor-Based Message Pagination
+- **Status**: ✅ **COMPLETED & VERIFIED**
 - **Objective**: Infinite scroll message pagination without memory exhaustion or query drift.
 - **Architecture**:
   ```text
@@ -346,9 +347,17 @@ This document serves as the master engineering blueprint and step-by-step implem
   ```json
   {
     "items": [...],
-    "next_cursor": "eyJjcmVhdGVkX2F0IjoxNzQwMDAwLCJpZCI6IjY3..."
+    "next_cursor": "eyJjcmVhdGVkX2F0IjoxNzQwMDAwLCJpZCI6IjY3...",
+    "has_more": true
   }
   ```
+- **Step-by-Step Implementation**:
+  1. Created `app/core/pagination.py` in Message Service for packing and unpacking base64url JSON cursors safely with timestamp and ObjectId tie-breaker.
+  2. Registered compound index `{ conversation_id: 1, created_at: -1, _id: -1 }` in `backend/shared/database/indexes.py`.
+  3. Updated `MessageRepository.get_messages_by_conversation` to fetch `limit + 1` reverse-chronologically and slice into chronological items, `next_cursor`, and `has_more`.
+  4. Updated `MessageService` and FastAPI router `GET /api/v1/conversations/{conversation_id}/messages` with `cursor` and `limit` query parameters.
+  5. Updated frontend `getMessages(conversationId, limit, cursor, token)` in `frontend/lib/api/message.ts` and wired into `frontend/app/app/chats/[conversationId]/page.tsx`.
+  6. Automated test suite in `tests/test_messages.py` (`test_cursor_pagination`) verified with 100% test coverage.
 
 ---
 

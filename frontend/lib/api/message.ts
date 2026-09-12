@@ -31,6 +31,8 @@ export interface MessageItem {
 export interface MessageListResponse {
   items: MessageItem[];
   total: number;
+  next_cursor?: string | null;
+  has_more?: boolean;
 }
 
 export interface SendMessagePayload {
@@ -76,16 +78,17 @@ export async function sendMessage(
 }
 
 /**
- * Retrieves message history for a conversation thread.
+ * Retrieves message history for a conversation thread with cursor pagination.
  */
 export async function getMessages(
   conversationId: string,
-  limit: number = 100,
-  skip: number = 0,
+  limit: number = 30,
+  cursor?: string,
   token?: string
 ): Promise<MessageListResponse> {
+  const cursorParam = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
   const res = await fetch(
-    `${MESSAGE_SERVICE_URL}/conversations/${conversationId}/messages?limit=${limit}&skip=${skip}`,
+    `${MESSAGE_SERVICE_URL}/conversations/${conversationId}/messages?limit=${limit}${cursorParam}`,
     {
       method: "GET",
       headers: {

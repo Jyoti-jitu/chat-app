@@ -113,20 +113,32 @@ class MessageService:
         self,
         current_user_id: str,
         conversation_id: str,
-        limit: int = 100,
-        skip: int = 0,
+        limit: int = 30,
+        cursor: Optional[str] = None,
     ) -> MessageListResponse:
-        """Retrieves messages for a conversation thread."""
+        """Retrieves messages for a conversation thread with cursor pagination."""
+        from app.core.pagination import decode_cursor
+
         await self._verify_conversation_membership(current_user_id, conversation_id)
 
-        items = await self.repo.get_messages_by_conversation(
-            conversation_id, limit=limit, skip=skip
+        cursor_time = None
+        cursor_id = None
+        if cursor:
+            cursor_time, cursor_id = decode_cursor(cursor)
+
+        items, next_cursor, has_more = await self.repo.get_messages_by_conversation(
+            conversation_id,
+            limit=limit,
+            cursor_time=cursor_time,
+            cursor_id=cursor_id,
         )
         total = await self.repo.count_messages(conversation_id)
 
         return MessageListResponse(
             items=[self._to_response(doc) for doc in items],
             total=total,
+            next_cursor=next_cursor,
+            has_more=has_more,
         )
 
     async def edit_message(

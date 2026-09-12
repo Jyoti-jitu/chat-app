@@ -112,7 +112,7 @@ export default function IndividualChatPage({
 
     // 2. Fetch live messages
     try {
-      const res = await getMessages(conversationId, 100, 0, token);
+      const res = await getMessages(conversationId, 100, undefined, token);
       if (res.items && res.items.length > 0) {
         const mapped: Message[] = res.items.map((item) => ({
           id: item.id,

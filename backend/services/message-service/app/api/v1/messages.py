@@ -2,7 +2,7 @@
 Message API endpoints for FluxChat.
 Protected by shared JWT authorization dependency.
 """
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, Query, status
 from app.schemas.message import (
     EditMessagePayload,
@@ -39,17 +39,17 @@ async def send_message(
     response_model=MessageListResponse,
     status_code=status.HTTP_200_OK,
     summary="List Thread Messages",
-    description="Retrieves messages for a conversation thread sorted chronologically.",
+    description="Retrieves messages for a conversation thread with cursor-based pagination.",
 )
 async def get_messages(
     conversation_id: str,
-    limit: int = Query(100, ge=1, le=200),
-    skip: int = Query(0, ge=0),
+    limit: int = Query(30, ge=1, le=100),
+    cursor: Optional[str] = Query(None, description="Base64URL cursor token"),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> MessageListResponse:
-    """Lists messages."""
+    """Lists messages with cursor pagination."""
     return await message_service.get_messages(
-        current_user["id"], conversation_id, limit=limit, skip=skip
+        current_user["id"], conversation_id, limit=limit, cursor=cursor
     )
 
 

@@ -2,7 +2,7 @@
 Message Repository for MongoDB Atlas operations on `messages` and `conversations` collections.
 """
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from bson import ObjectId
 from shared.database.mongodb import db_manager
 
@@ -67,19 +67,52 @@ class MessageRepository:
         return _normalize_id(doc)
 
     async def get_messages_by_conversation(
-        self, conversation_id: str, limit: int = 100, skip: int = 0
-    ) -> List[Dict[str, Any]]:
-        """Retrieves messages for a conversation sorted chronologically."""
+        self,
+        conversation_id: str,
+        limit: int = 30,
+        cursor_time: Optional[datetime] = None,
+        cursor_id: Optional[str] = None,
+    ) -> Tuple[List[Dict[str, Any]], Optional[str], bool]:
+        """
+        Retrieves messages for a conversation using cursor pagination.
+        Fetches backward in time (newest to oldest), then reverses to chronological order for UI display.
+        Returns: (items, next_cursor, has_more)
+        """
+        from app.core.pagination import encode_cursor
+
+        query: Dict[str, Any] = {"conversation_id": str(conversation_id)}
+        if cursor_time and cursor_id:
+            oid = _to_object_id(cursor_id)
+            query["$or"] = [
+                {"created_at": {"$lt": cursor_time}},
+                {"created_at": cursor_time, "_id": {"$lt": oid}},
+            ]
+        elif cursor_time:
+            query["created_at"] = {"$lt": cursor_time}
+
+        # Query limit + 1 to detect if further pages exist
         cursor = (
-            self.collection.find({"conversation_id": str(conversation_id)})
-            .sort("created_at", 1)
-            .skip(skip)
-            .limit(limit)
+            self.collection.find(query)
+            .sort([("created_at", -1), ("_id", -1)])
+            .limit(limit + 1)
         )
-        items = []
+
+        raw_items = []
         async for doc in cursor:
-            items.append(_normalize_id(doc))
-        return items
+            raw_items.append(_normalize_id(doc))
+
+        has_more = len(raw_items) > limit
+        if has_more:
+            items = raw_items[:limit]
+            last_item = items[-1]
+            next_cursor = encode_cursor(last_item["created_at"], last_item["id"])
+        else:
+            items = raw_items
+            next_cursor = None
+
+        # Reverse to chronological order (oldest to newest) for UI thread display
+        items.reverse()
+        return items, next_cursor, has_more
 
     async def count_messages(self, conversation_id: str) -> int:
         """Counts total messages in a conversation."""

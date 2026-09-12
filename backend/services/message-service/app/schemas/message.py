@@ -44,9 +44,11 @@ class MessageResponse(BaseModel):
 
 
 class MessageListResponse(BaseModel):
-    """Paginated or complete list of messages in a conversation thread."""
+    """Paginated list of messages in a conversation thread with cursor support."""
     items: List[MessageResponse]
     total: int
+    next_cursor: Optional[str] = None
+    has_more: bool = False
 
 
 class ActionSuccessResponse(BaseModel):
