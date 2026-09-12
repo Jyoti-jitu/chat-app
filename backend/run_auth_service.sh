@@ -12,5 +12,5 @@ export PYTHONPATH="$DIR:$DIR/services/auth-service:${PYTHONPATH:-}"
 
 cd services/auth-service
 echo "🚀 Starting FluxChat Auth Service on http://0.0.0.0:8001 (Docs: http://localhost:8001/docs)..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+exec uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload --reload-dir "$DIR"
 

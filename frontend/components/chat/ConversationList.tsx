@@ -69,8 +69,18 @@ export function ConversationList({ activeId, className }: ConversationListProps)
 
       // Parallel fetch: conversations and confirmed contacts
       const [res, contactsRes] = await Promise.all([
-        getConversations(50, 0, token).catch(() => ({ items: [] })),
-        getContacts(token).catch(() => ({ items: [] })),
+        getConversations(50, 0, token).catch((err) => {
+          if (err?.message?.includes("401") || err?.message?.toLowerCase().includes("unauthorized")) {
+            router.push("/login");
+          }
+          return { items: null as any };
+        }),
+        getContacts(token).catch((err) => {
+          if (err?.message?.includes("401") || err?.message?.toLowerCase().includes("unauthorized")) {
+            router.push("/login");
+          }
+          return { items: [] };
+        }),
       ]);
 
       const contactItems = contactsRes.items || [];
@@ -78,10 +88,10 @@ export function ConversationList({ activeId, className }: ConversationListProps)
       const confirmedContactIds = new Set(contactItems.map((c) => c.contact_id));
 
       if (res.items && res.items.length > 0) {
-        const mapped: Conversation[] = res.items.map((item) => {
+        const mapped: Conversation[] = res.items.map((item: any) => {
           const otherMember =
-            item.members?.find((m) => m.id !== myUserId) ||
-            item.member_ids?.find((id) => id !== myUserId);
+            item.members?.find((m: any) => m.id !== myUserId) ||
+            item.member_ids?.find((id: string) => id !== myUserId);
           const otherUserId =
             typeof otherMember === "string" ? otherMember : otherMember?.id;
 
@@ -112,11 +122,18 @@ export function ConversationList({ activeId, className }: ConversationListProps)
               ? new Date(item.updated_at).toLocaleDateString()
               : undefined,
             unreadCount: item.unread_count || 0,
-            isOnline: item.members.some((m) => m.is_online),
+            isOnline: item.members?.some((m: any) => m.is_online) || false,
           };
         });
         setConversations(mapped);
-      } else {
+
+        // If Primary section is empty but General has conversations, auto-switch to General
+        const hasPrimary = mapped.some((c: Conversation) => (c.section || "primary") === "primary");
+        const hasGeneral = mapped.some((c: Conversation) => c.section === "general");
+        if (!hasPrimary && hasGeneral && !activeId) {
+          setActiveSection("general");
+        }
+      } else if (res.items !== null) {
         setConversations([]);
       }
     } catch (err: any) {
@@ -124,7 +141,7 @@ export function ConversationList({ activeId, className }: ConversationListProps)
     } finally {
       setIsLoading(false);
     }
-  }, [currentUserId]);
+  }, [currentUserId, activeId, router]);
 
   const fetchContactsList = useCallback(async () => {
     const token = getAuthToken();

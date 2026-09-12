@@ -12,4 +12,4 @@ export PYTHONPATH="$DIR:$DIR/services/notification-service:${PYTHONPATH:-}"
 
 cd services/notification-service
 echo "🚀 Starting FluxChat Notification Service on http://0.0.0.0:8006 (Docs: http://localhost:8006/docs)..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8006 --reload
+exec uvicorn app.main:app --host 0.0.0.0 --port 8006 --reload --reload-dir "$DIR"

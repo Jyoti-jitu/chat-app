@@ -18,6 +18,11 @@ async def proxy_websocket(client_ws: WebSocket, subpath: str = "/ws") -> None:
     # Form upstream URL with original query string
     query_str = client_ws.scope.get("query_string", b"").decode("utf-8")
     upstream_base = settings.WS_SERVICE_URL.rstrip("/")
+    if upstream_base.startswith("http://"):
+        upstream_base = "ws://" + upstream_base[7:]
+    elif upstream_base.startswith("https://"):
+        upstream_base = "wss://" + upstream_base[8:]
+
     # ensure subpath matches upstream route (websocket service listens on /ws)
     target_path = "/ws"
     upstream_url = f"{upstream_base}{target_path}"

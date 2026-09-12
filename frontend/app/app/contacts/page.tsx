@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Search,
   Plus,
@@ -36,6 +37,7 @@ import {
 } from "@/lib/api/contact";
 
 export default function ContactsPage() {
+  const router = useRouter();
   // Tabs: "directory" (All Registered Users) | "contacts" (My Confirmed Contacts)
   const [activeTab, setActiveTab] = useState<string>("directory");
 
@@ -87,28 +89,45 @@ export default function ContactsPage() {
 
       // Parallel fetch: Confirmed contacts, All registered users, and Connection requests
       const [contactsRes, usersRes, requestsRes] = await Promise.all([
-        getContacts(token).catch(() => ({ items: [], total: 0 })),
-        searchUsers("", 100, token).catch(() => ({ items: [], total: 0, query: "" })),
-        getContactRequests(token).catch(() => ({ received: [], sent: [] })),
+        getContacts(token).catch((err) => {
+          if (err?.message?.includes("401") || err?.message?.toLowerCase().includes("unauthorized")) {
+            router.push("/login");
+          }
+          return { items: null as any, total: 0 };
+        }),
+        searchUsers("", 100, token).catch((err) => {
+          if (err?.message?.includes("401") || err?.message?.toLowerCase().includes("unauthorized")) {
+            router.push("/login");
+          }
+          return { items: null as any, total: 0, query: "" };
+        }),
+        getContactRequests(token).catch((err) => {
+          if (err?.message?.includes("401") || err?.message?.toLowerCase().includes("unauthorized")) {
+            router.push("/login");
+          }
+          return { received: [], sent: [] };
+        }),
       ]);
 
       // 1. Process confirmed contacts
-      const mappedContacts: User[] = (contactsRes.items || []).map((item) => ({
-        id: item.contact_id,
-        name: item.user.name,
-        username: item.user.username,
-        email: `${item.user.username}@fluxchat.io`,
-        phone: item.user.phone || undefined,
-        avatar: item.user.avatar || undefined,
-        bio: item.user.bio || undefined,
-        isOnline: item.user.is_online,
-        lastSeen: item.user.last_seen
-          ? new Date(item.user.last_seen).toLocaleDateString()
-          : "Offline",
-      }));
-      setContacts(mappedContacts);
-      const cIdSet = new Set(mappedContacts.map((c) => c.id));
-      setContactIds(cIdSet);
+      if (contactsRes.items !== null) {
+        const mappedContacts: User[] = (contactsRes.items || []).map((item: any) => ({
+          id: item.contact_id,
+          name: item.user.name,
+          username: item.user.username,
+          email: `${item.user.username}@fluxchat.io`,
+          phone: item.user.phone || undefined,
+          avatar: item.user.avatar || undefined,
+          bio: item.user.bio || undefined,
+          isOnline: item.user.is_online,
+          lastSeen: item.user.last_seen
+            ? new Date(item.user.last_seen).toLocaleDateString()
+            : "Offline",
+        }));
+        setContacts(mappedContacts);
+        const cIdSet = new Set(mappedContacts.map((c) => c.id));
+        setContactIds(cIdSet);
+      }
 
       // 2. Process pending connection requests
       const sentIds = new Set<string>((requestsRes.sent || []).map((r) => r.recipient_id));
@@ -121,26 +140,28 @@ export default function ContactsPage() {
       setPendingReceivedMap(receivedMap);
 
       // 3. Process all registered users
-      const mappedUsers: User[] = (usersRes.items || []).map((u) => ({
-        id: u.id,
-        name: u.name,
-        username: u.username,
-        email: `${u.username}@fluxchat.io`,
-        phone: u.phone || undefined,
-        avatar: u.avatar || undefined,
-        bio: u.bio || undefined,
-        isOnline: u.is_online,
-        lastSeen: u.last_seen
-          ? new Date(u.last_seen).toLocaleDateString()
-          : "Offline",
-      }));
-      setRegisteredUsers(mappedUsers);
+      if (usersRes.items !== null) {
+        const mappedUsers: User[] = (usersRes.items || []).map((u: any) => ({
+          id: u.id,
+          name: u.name,
+          username: u.username,
+          email: `${u.username}@fluxchat.io`,
+          phone: u.phone || undefined,
+          avatar: u.avatar || undefined,
+          bio: u.bio || undefined,
+          isOnline: u.is_online,
+          lastSeen: u.last_seen
+            ? new Date(u.last_seen).toLocaleDateString()
+            : "Offline",
+        }));
+        setRegisteredUsers(mappedUsers);
+      }
     } catch (err: any) {
       console.warn("Failed to load contacts directory:", err.message);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     loadAllData();

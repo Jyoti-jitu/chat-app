@@ -122,6 +122,34 @@ export default function IndividualChatPage({
     let otherUserId: string | null = null;
     let targetId = conversationId;
 
+    let myUserId = currentUserId;
+    if (!myUserId) {
+      if (typeof window !== "undefined") {
+        const userStr = localStorage.getItem("fluxchat_user");
+        if (userStr) {
+          try {
+            const u = JSON.parse(userStr);
+            if (u.id) {
+              myUserId = u.id;
+              setCurrentUserId(u.id);
+            }
+          } catch {}
+        }
+      }
+      if (!myUserId && token) {
+        try {
+          const parts = token.split(".");
+          if (parts.length === 3) {
+            const payload = JSON.parse(atob(parts[1]));
+            if (payload.sub) {
+              myUserId = payload.sub;
+              setCurrentUserId(payload.sub);
+            }
+          }
+        } catch {}
+      }
+    }
+
     // 1. Fetch conversation details
     if (conversationId.startsWith("c_")) {
       const recipientId = conversationId.replace(/^c_/, "");
@@ -138,6 +166,10 @@ export default function IndividualChatPage({
         // Transition URL to real conversation ID so socket events and routes match canonical thread
         router.replace(`/app/chats/${directConv.id}`);
       } catch (err: any) {
+        if (err?.message?.includes("401") || err?.message?.toLowerCase().includes("unauthorized")) {
+          router.push("/login");
+          return;
+        }
         try {
           const publicProfile = await getUserPublicProfile(recipientId, token);
           setConversation({
@@ -154,7 +186,7 @@ export default function IndividualChatPage({
       try {
         const convDetails = await getConversationDetails(conversationId, token);
         if (convDetails.type === "direct") {
-          const other = convDetails.members.find((m) => m.id !== currentUserId);
+          const other = convDetails.members.find((m) => m.id !== myUserId);
           if (other) otherUserId = other.id;
         }
         setConversation({
@@ -164,6 +196,10 @@ export default function IndividualChatPage({
           isOnline: convDetails.members.some((m) => m.is_online),
         });
       } catch (err: any) {
+        if (err?.message?.includes("401") || err?.message?.toLowerCase().includes("unauthorized")) {
+          router.push("/login");
+          return;
+        }
         console.warn("Could not fetch conversation details:", err.message);
       }
     }
@@ -232,7 +268,7 @@ export default function IndividualChatPage({
 
         // Mark incoming unread messages as read
         for (const item of res.items) {
-          if (item.sender_id !== currentUserId && item.status !== "read") {
+          if (item.sender_id !== myUserId && item.status !== "read") {
             markMessageAsRead(item.id, token).catch(() => {});
           }
         }
@@ -240,6 +276,10 @@ export default function IndividualChatPage({
         setMessages([]);
       }
     } catch (err: any) {
+      if (err?.message?.includes("401") || err?.message?.toLowerCase().includes("unauthorized")) {
+        router.push("/login");
+        return;
+      }
       if (!silent) setMessages([]);
     }
   }, [conversationId, currentUserId, router]);
