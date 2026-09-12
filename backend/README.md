@@ -201,7 +201,7 @@ This document serves as the master engineering blueprint and step-by-step implem
 ---
 
 ### Phase 6 — Contacts Management
-- **Status**: ⏳ **IN PROGRESS / NEXT**
+- **Status**: ✅ **COMPLETED & VERIFIED**
 - **Objective**: Manage bidirectional connection requests and contact lists.
 - **Architecture**:
   ```text
@@ -214,7 +214,7 @@ This document serves as the master engineering blueprint and step-by-step implem
        "_id": "ObjectId",
        "sender_id": "user_id_1",
        "recipient_id": "user_id_2",
-       "status": "pending | accepted | rejected",
+       "status": "pending | accepted | rejected | cancelled",
        "created_at": "datetime",
        "updated_at": "datetime"
      }
@@ -228,14 +228,17 @@ This document serves as the master engineering blueprint and step-by-step implem
        "created_at": "datetime"
      }
      ```
-  3. Endpoints:
-     - `POST   /api/v1/contacts/requests` — Send request `{ recipient_id }`. Prevents self-request.
-     - `GET    /api/v1/contacts/requests` — List received and sent requests with sender info.
+  3. Implemented Endpoints in User Service (`http://localhost:8002`):
+     - `POST   /api/v1/contacts/requests` — Send request by identifier (username/email/phone) or direct `recipient_id`. Prevents self-request and duplicates.
+     - `GET    /api/v1/contacts/requests` — List received and sent requests with hydrated sender/recipient profiles.
      - `POST   /api/v1/contacts/requests/{id}/accept` — Accept request and insert bidirectional contact entries.
      - `POST   /api/v1/contacts/requests/{id}/reject` — Reject request.
-     - `DELETE /api/v1/contacts/{contact_id}` — Remove contact from roster.
+     - `POST   /api/v1/contacts/requests/{id}/cancel` — Cancel sent request.
+     - `DELETE /api/v1/contacts/{contact_id}` — Remove contact from roster (removes bidirectional connection).
      - `GET    /api/v1/contacts` — List all contacts with online presence metadata.
-  4. Security: Enforce that only the target `recipient_id` can accept or reject a request.
+  4. Security: Enforce that only the target `recipient_id` can accept or reject a request, and only `sender_id` can cancel.
+  5. Frontend integration: API client in `frontend/lib/api/contact.ts`, live UI wiring in `frontend/app/app/contacts/page.tsx` and `frontend/app/app/requests/page.tsx`.
+  6. Automated test suite: `tests/test_contacts.py` passing with 100% success.
 
 ---
 
@@ -604,7 +607,16 @@ This document serves as the master engineering blueprint and step-by-step implem
   - Connected to: `mongodb+srv://parhijyotiswarup_db_user:***@chat.njrcbvy.mongodb.net/?appName=Chat`
   - Health check: `{"status": "ok", "database": "connected"}`
 - **Phase 3 (Authentication Service)**: ✅ **Completed & Verified**
-  - Endpoints: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
+  - Endpoints: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`, `POST /auth/send-otp`, `POST /auth/verify-otp`
   - Bcrypt hashing (12 rounds) & JWT (HS256 with token rotation & revocation)
-  - Full automated tests passing (`7/7 passed`)
-- **Phase 4 (Authorization)**: ⏳ **Next in Queue**
+  - 2Factor SMS OTP gateway integration
+  - Full automated tests passing (`9/9 passed`)
+- **Phase 4 (Authorization & Security Dependencies)**: ✅ **Completed & Verified**
+  - Reusable JWT dependencies `get_current_user`, `require_active_user`, `require_admin` in `shared/security/dependencies.py`
+- **Phase 5 (User Service Microservice)**: ✅ **Completed & Verified**
+  - Running on port **8002**, MongoDB Atlas integration, profile retrieval/update, user directory search, public profile endpoints, and frontend profile page integration.
+  - Full automated tests passing (`3/3 passed`)
+- **Phase 6 (Contacts Management)**: ✅ **Completed & Verified**
+  - Bidirectional connection requests (`POST /api/v1/contacts/requests`), accept/reject/cancel lifecycles, roster retrieval (`GET /api/v1/contacts`), contact removal (`DELETE /api/v1/contacts/{id}`), frontend API client and live UI pages (`/app/contacts`, `/app/requests`).
+  - Full automated tests passing (`4/4 passed`)
+- **Phase 7 (Chat & Conversation Service)**: ⏳ **Next in Queue**
