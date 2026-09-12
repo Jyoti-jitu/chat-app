@@ -17,7 +17,8 @@ async def db_lifecycle():
     await db_manager.disconnect()
 
 
-def test_password_hasher():
+@pytest.mark.asyncio
+async def test_password_hasher():
     """Test bcrypt password hashing and verification."""
     password = "SuperSecretPassword123!"
     hashed = PasswordHasher.hash_password(password)
@@ -28,7 +29,8 @@ def test_password_hasher():
     assert PasswordHasher.verify_password("", hashed) is False
 
 
-def test_jwt_service():
+@pytest.mark.asyncio
+async def test_jwt_service():
     """Test JWT token issuance and decoding."""
     user_id = "507f1f77bcf86cd799439011"
     email = "test@fluxchat.internal"
