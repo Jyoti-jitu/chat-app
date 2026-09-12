@@ -495,13 +495,20 @@ This document serves as the master engineering blueprint and step-by-step implem
 ---
 
 ### Phase 18 — Notification Service
+- **Status**: ✅ **COMPLETED & VERIFIED**
 - **Objective**: Real-time and persistent alerts for messages, contact requests, and group invites.
+- **Port**: `8006`
 - **Endpoints**:
-  - `GET  /api/v1/notifications` — Fetch user's notifications.
+  - `GET  /api/v1/notifications` — Fetch user's notifications (supports category filtering, unread count).
+  - `POST /api/v1/notifications` — Internal notification ingest & Redis broadcast.
   - `POST /api/v1/notifications/{id}/read` — Mark notification as read.
   - `POST /api/v1/notifications/read-all` — Mark all as read.
   - `DELETE /api/v1/notifications/{id}` — Dismiss notification.
   - `DELETE /api/v1/notifications` — Clear all notifications.
+  - `GET  /health` & `GET /api/v1/health` — Service health check.
+- **Integration**:
+  - Redis Pub/Sub events (`notification.new`) dispatched to client via WebSocket service.
+  - Frontend client (`frontend/lib/api/notification.ts`) and notifications screen (`/app/notifications`).
 
 ---
 

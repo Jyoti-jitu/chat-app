@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   MessageSquare,
@@ -18,12 +18,88 @@ import { Button } from "@/components/ui/Button";
 import { mockNotifications } from "@/lib/mock/notifications";
 import { NotificationItem, NotificationCategory } from "@/types/notification";
 import { cn } from "@/lib/utils/cn";
+import {
+  getNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  deleteNotification,
+  clearAllNotifications,
+  wsClient,
+} from "@/lib/api";
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<NotificationItem[]>(mockNotifications);
   const [activeTab, setActiveTab] = useState<string>("all");
   const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+
+  const fetchLiveNotifications = useCallback(async () => {
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("fluxchat_access_token") || localStorage.getItem("accessToken")
+        : null;
+    if (!token) return;
+
+    try {
+      const res = await getNotifications(activeTab, 50, 0, token);
+      if (res.items && res.items.length > 0) {
+        const mapped: NotificationItem[] = res.items.map((item) => ({
+          id: item.id,
+          type: (item.type as any) || "system",
+          category: (item.category as any) || "messages",
+          actor: {
+            name: item.actor.name,
+            username: item.actor.username || undefined,
+            avatar: item.actor.avatar || undefined,
+          },
+          title: item.title || undefined,
+          description: item.description,
+          timestamp: item.created_at
+            ? new Date(item.created_at).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : "Just now",
+          isRead: item.is_read,
+          link: item.link || undefined,
+        }));
+        setNotifications(mapped);
+      }
+    } catch (err: any) {
+      console.warn("Using fallback notifications:", err.message);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    fetchLiveNotifications();
+
+    const handleNewNotification = (payload: any) => {
+      const data = payload.data || payload;
+      setNotifications((prev) => [
+        {
+          id: data.id || `notif_${Date.now()}`,
+          type: data.type || "system",
+          category: data.category || "messages",
+          actor: {
+            name: data.actor?.name || "System",
+            username: data.actor?.username,
+            avatar: data.actor?.avatar,
+          },
+          title: data.title,
+          description: data.description || "",
+          timestamp: "Just now",
+          isRead: false,
+          link: data.link,
+        },
+        ...prev,
+      ]);
+    };
+
+    wsClient.on("notification.new", handleNewNotification);
+    return () => {
+      wsClient.off("notification.new", handleNewNotification);
+    };
+  }, [fetchLiveNotifications]);
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
@@ -34,13 +110,20 @@ export default function NotificationsPage() {
     { id: "system", label: "System" },
   ];
 
-  const handleMarkAllAsRead = () => {
+  const handleMarkAllAsRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     setToastMessage("All notifications marked as read");
     setTimeout(() => setToastMessage(""), 2000);
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("fluxchat_access_token") || localStorage.getItem("accessToken")
+        : null;
+    if (token) {
+      markAllNotificationsAsRead(token).catch(console.warn);
+    }
   };
 
-  const handleDeleteNotification = (id: string, e?: React.MouseEvent) => {
+  const handleDeleteNotification = async (id: string, e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -48,14 +131,29 @@ export default function NotificationsPage() {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
     setToastMessage("Notification dismissed");
     setTimeout(() => setToastMessage(""), 2000);
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("fluxchat_access_token") || localStorage.getItem("accessToken")
+        : null;
+    if (token && !id.startsWith("n1") && !id.startsWith("n2") && !id.startsWith("n3")) {
+      deleteNotification(id, token).catch(console.warn);
+    }
   };
 
-  const handleConfirmClearAll = () => {
+  const handleConfirmClearAll = async () => {
     setNotifications([]);
     setIsClearAllModalOpen(false);
     setToastMessage("All notifications cleared");
     setTimeout(() => setToastMessage(""), 2000);
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("fluxchat_access_token") || localStorage.getItem("accessToken")
+        : null;
+    if (token) {
+      clearAllNotifications(token).catch(console.warn);
+    }
   };
+
 
   const filteredNotifications = notifications.filter((n) => {
     if (activeTab === "all") return true;

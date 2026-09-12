@@ -16,4 +16,5 @@ export * from "./contact";
 export * from "./chat";
 export * from "./message";
 export * from "./websocket";
+export * from "./notification";
 
