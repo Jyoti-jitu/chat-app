@@ -51,23 +51,35 @@ fi
 launch_internal_service() {
     local name="$1"
     local port="$2"
-    local app_module="$3"
+    local service_dir="$3"
 
     echo "  ⏳ Launching $name on internal port $port..."
-    python -m uvicorn "$app_module" --host 127.0.0.1 --port "$port" --workers 1 &
+    (
+        cd "$DIR/services/$service_dir"
+        export PYTHONPATH="$DIR:$DIR/services/$service_dir:${PYTHONPATH:-}"
+        exec python -m uvicorn app.main:app --host 127.0.0.1 --port "$port"
+    ) &
     local s_pid=$!
     PIDS+=("$s_pid")
 }
 
-launch_internal_service "Auth Service" 8001 "services.auth-service.app.main:app"
-launch_internal_service "User Service" 8002 "services.user-service.app.main:app"
-launch_internal_service "Chat Service" 8003 "services.chat-service.app.main:app"
-launch_internal_service "Message Service" 8004 "services.message-service.app.main:app"
-launch_internal_service "WebSocket Service" 8005 "services.websocket-service.app.main:app"
-launch_internal_service "Notification Service" 8006 "services.notification-service.app.main:app"
+launch_internal_service "Auth Service" 8001 "auth-service"
+launch_internal_service "User Service" 8002 "user-service"
+launch_internal_service "Chat Service" 8003 "chat-service"
+launch_internal_service "Message Service" 8004 "message-service"
+launch_internal_service "WebSocket Service" 8005 "websocket-service"
+launch_internal_service "Notification Service" 8006 "notification-service"
 
-# Brief pause to let internal services bind
-sleep 2
+# Wait for internal services to be ready
+echo "⏳ Waiting for internal microservices to initialize..."
+for port in 8001 8002 8003 8004 8005 8006; do
+    attempts=0
+    while ! curl -s "http://127.0.0.1:$port/health/live" >/dev/null 2>&1 && [ $attempts -lt 20 ]; do
+        sleep 0.5
+        attempts=$((attempts + 1))
+    done
+done
+echo "✔ Internal microservices are active."
 
 # 3. Configure API Gateway routing
 export AUTH_SERVICE_URL="http://127.0.0.1:8001"
@@ -82,4 +94,7 @@ echo "🌐 Launching API Gateway Ingress on 0.0.0.0:$RENDER_PORT (Render Web Por
 echo "=============================================================================="
 
 # 4. Foreground the API Gateway so Render can track process lifecycle and $PORT
-exec python -m uvicorn services.api-gateway.app.main:app --host 0.0.0.0 --port "$RENDER_PORT" --workers 2
+cd "$DIR/services/api-gateway"
+export PYTHONPATH="$DIR:$DIR/services/api-gateway:${PYTHONPATH:-}"
+exec python -m uvicorn app.main:app --host 0.0.0.0 --port "$RENDER_PORT"
+

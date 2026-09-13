@@ -19,6 +19,8 @@ import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { User } from "@/types/user";
 import { getMyProfile, updateMyProfile } from "@/lib/api/user";
+import { getConversations } from "@/lib/api/chat";
+import { getContacts } from "@/lib/api/contact";
 
 export default function ProfilePage() {
   const [user, setUser] = useState<User>(() => {
@@ -35,6 +37,13 @@ export default function ProfilePage() {
             bio: u.bio || "",
             avatar: u.avatar || undefined,
             isOnline: true,
+            joinedDate: u.created_at
+              ? new Date(u.created_at).toLocaleDateString("en-US", {
+                  month: "short",
+                  year: "numeric",
+                })
+              : "Recently",
+            stats: { chats: 0, connections: 0, groups: 0 },
           };
         } catch {}
       }
@@ -46,6 +55,8 @@ export default function ProfilePage() {
       email: "",
       bio: "",
       isOnline: true,
+      joinedDate: "Recently",
+      stats: { chats: 0, connections: 0, groups: 0 },
     };
   });
 
@@ -57,33 +68,66 @@ export default function ProfilePage() {
   const [successNotice, setSuccessNotice] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Fetch live profile from User Service if authenticated
+  // Fetch live profile and real counts from User & Chat Services
   useEffect(() => {
-    async function loadProfile() {
+    async function loadLiveProfileData() {
       try {
-        const liveUser = await getMyProfile();
-        if (liveUser) {
+        const [liveUser, convs, contactsRes] = await Promise.allSettled([
+          getMyProfile(),
+          getConversations(),
+          getContacts(),
+        ]);
+
+        let chatsCount = 0;
+        let groupsCount = 0;
+        let connectionsCount = 0;
+
+        if (convs.status === "fulfilled" && Array.isArray(convs.value)) {
+          chatsCount = convs.value.length;
+          groupsCount = convs.value.filter((c) => c.type === "group").length;
+        }
+
+        if (contactsRes.status === "fulfilled" && contactsRes.value?.items) {
+          connectionsCount = contactsRes.value.items.length;
+        }
+
+        if (liveUser.status === "fulfilled" && liveUser.value) {
+          const u = liveUser.value;
+          const joinedFormatted = u.created_at
+            ? new Date(u.created_at).toLocaleDateString("en-US", {
+                month: "short",
+                year: "numeric",
+              })
+            : "Recently";
+
           setUser({
-            id: liveUser.id,
-            name: liveUser.name,
-            username: liveUser.username,
-            email: liveUser.email,
-            bio: liveUser.bio || "",
-            avatar: liveUser.avatar || undefined,
-            isOnline: liveUser.is_online,
+            id: u.id,
+            name: u.name,
+            username: u.username,
+            email: u.email,
+            bio: u.bio || "",
+            avatar: u.avatar || undefined,
+            isOnline: u.is_online,
+            joinedDate: joinedFormatted,
+            stats: {
+              chats: chatsCount,
+              connections: connectionsCount,
+              groups: groupsCount,
+            },
           });
-          setName(liveUser.name);
-          setBio(liveUser.bio || "");
-          setEmail(liveUser.email);
+          setName(u.name);
+          setBio(u.bio || "");
+          setEmail(u.email);
+
           if (typeof window !== "undefined") {
-            localStorage.setItem("fluxchat_user", JSON.stringify(liveUser));
+            localStorage.setItem("fluxchat_user", JSON.stringify(u));
           }
         }
-      } catch {
-        // Keeps stored authenticated user
+      } catch (err) {
+        console.warn("Error loading live profile details:", err);
       }
     }
-    loadProfile();
+    loadLiveProfileData();
   }, []);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -92,25 +136,25 @@ export default function ProfilePage() {
     setErrorMessage("");
 
     try {
-      const updated = await updateMyProfile({ name, bio });
+      const updated = await updateMyProfile({
+        name: name.trim(),
+        bio: bio.trim(),
+        email: email.trim().toLowerCase(),
+      });
       setUser((prev) => ({
         ...prev,
         name: updated.name,
         bio: updated.bio || "",
+        email: updated.email,
       }));
+      if (typeof window !== "undefined") {
+        localStorage.setItem("fluxchat_user", JSON.stringify(updated));
+      }
       setIsEditModalOpen(false);
       setSuccessNotice(true);
-      setTimeout(() => setSuccessNotice(false), 3000);
-    } catch {
-      // Local state fallback
-      setUser((prev) => ({
-        ...prev,
-        name,
-        bio,
-      }));
-      setIsEditModalOpen(false);
-      setSuccessNotice(true);
-      setTimeout(() => setSuccessNotice(false), 3000);
+      setTimeout(() => setSuccessNotice(false), 3500);
+    } catch (err: any) {
+      setErrorMessage(err.message || "Failed to update profile. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -262,6 +306,11 @@ export default function ProfilePage() {
         description="Update your display name, bio, and public information."
       >
         <form onSubmit={handleSaveProfile} className="space-y-4">
+          {errorMessage && (
+            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 text-xs font-semibold border border-rose-200 dark:border-rose-900/50">
+              {errorMessage}
+            </div>
+          )}
           <Input
             id="editName"
             label="Full Name"
@@ -300,7 +349,9 @@ export default function ProfilePage() {
             >
               Cancel
             </Button>
-            <Button type="submit">Save Changes</Button>
+            <Button type="submit" disabled={isSaving}>
+              {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
           </div>
         </form>
       </Modal>
