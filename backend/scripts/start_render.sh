@@ -57,10 +57,15 @@ launch_internal_service() {
     (
         cd "$DIR/services/$service_dir"
         export PYTHONPATH="$DIR:$DIR/services/$service_dir:${PYTHONPATH:-}"
-        exec python -m uvicorn app.main:app --host 127.0.0.1 --port "$port"
+        while true; do
+            python -m uvicorn app.main:app --host 127.0.0.1 --port "$port" || true
+            echo "⚠️ $name on port $port exited. Restarting in 2s..."
+            sleep 2
+        done
     ) &
     local s_pid=$!
     PIDS+=("$s_pid")
+    sleep 0.5
 }
 
 launch_internal_service "Auth Service" 8001 "auth-service"
@@ -74,7 +79,7 @@ launch_internal_service "Notification Service" 8006 "notification-service"
 echo "⏳ Waiting for internal microservices to initialize..."
 for port in 8001 8002 8003 8004 8005 8006; do
     attempts=0
-    while ! curl -s "http://127.0.0.1:$port/health/live" >/dev/null 2>&1 && [ $attempts -lt 20 ]; do
+    while ! curl -s "http://127.0.0.1:$port/health/live" >/dev/null 2>&1 && [ $attempts -lt 40 ]; do
         sleep 0.5
         attempts=$((attempts + 1))
     done
