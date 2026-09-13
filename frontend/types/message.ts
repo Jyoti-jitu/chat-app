@@ -22,4 +22,5 @@ export interface Message {
   attachment?: MessageAttachment;
   edited?: boolean;
   reactions?: MessageReaction[];
+  replyTo?: string;
 }

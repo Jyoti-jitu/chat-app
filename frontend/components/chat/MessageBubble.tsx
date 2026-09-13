@@ -10,15 +10,21 @@ import { cn } from "@/lib/utils/cn";
 export interface MessageBubbleProps {
   message: Message;
   isMe: boolean;
+  repliedMessage?: Message;
   onDelete?: (id: string) => void;
   onReact?: (id: string, emoji: string) => void;
+  onReply?: (message: Message) => void;
+  onEdit?: (message: Message) => void;
 }
 
 export function MessageBubble({
   message,
   isMe,
+  repliedMessage,
   onDelete,
   onReact,
+  onReply,
+  onEdit,
 }: MessageBubbleProps) {
   const [reactionList, setReactionList] = useState(message.reactions || []);
 
@@ -40,7 +46,7 @@ export function MessageBubble({
       id: "reply",
       label: "Reply",
       icon: <Reply className="w-3.5 h-3.5" />,
-      onClick: () => {},
+      onClick: () => onReply?.(message),
     },
     {
       id: "react",
@@ -60,13 +66,13 @@ export function MessageBubble({
             id: "edit",
             label: "Edit",
             icon: <Edit3 className="w-3.5 h-3.5" />,
-            onClick: () => {},
+            onClick: () => onEdit?.(message),
           },
         ]
       : []),
     {
       id: "delete",
-      label: isMe ? "Delete for everyone" : "Delete for me",
+      label: isMe ? "Delete for everyone" : "Remove for me",
       icon: <Trash2 className="w-3.5 h-3.5" />,
       danger: true,
       onClick: () => onDelete?.(message.id),
@@ -106,6 +112,16 @@ export function MessageBubble({
           />
         </div>
 
+        {/* Replied message quote banner if present */}
+        {repliedMessage && (
+          <div className="mb-2 p-2 rounded-xl bg-black/5 dark:bg-white/5 border-l-3 border-[#168F67] dark:border-[#22A06B] text-xs max-w-full">
+            <span className="font-bold text-[10px] text-[#168F67] dark:text-[#22A06B] block mb-0.5">
+              {repliedMessage.senderId === message.senderId ? "You" : "Replied Message"}
+            </span>
+            <p className="truncate text-xs opacity-75">{repliedMessage.content}</p>
+          </div>
+        )}
+
         {/* Message text content */}
         {message.content && (
           <p className="leading-relaxed whitespace-pre-wrap select-text">
@@ -120,7 +136,7 @@ export function MessageBubble({
           </div>
         )}
 
-        {/* Timestamp and Delivery Status Tick */}
+        {/* Timestamp, Edited Tag, and Delivery Status Tick */}
         <div
           className={cn(
             "flex items-center gap-1.5 mt-1 text-[10px]",
@@ -130,6 +146,9 @@ export function MessageBubble({
           )}
         >
           <span>{message.createdAt}</span>
+          {message.edited && (
+            <span className="opacity-70 text-[9px] italic">(edited)</span>
+          )}
           {isMe && (
             <span>
               {message.status === "read" ? (

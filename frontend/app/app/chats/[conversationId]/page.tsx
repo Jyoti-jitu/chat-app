@@ -21,6 +21,7 @@ import {
 import {
   getMessages,
   sendMessage,
+  editMessage,
   deleteMessage,
   markMessageAsRead,
 } from "@/lib/api/message";
@@ -90,6 +91,10 @@ export default function IndividualChatPage({
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
 
+  // Reply and Edit state
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+
   // General section & pending connection request state
   const [isInGeneral, setIsInGeneral] = useState(false);
   const [pendingReceivedRequestId, setPendingReceivedRequestId] = useState<string | null>(null);
@@ -101,7 +106,11 @@ export default function IndividualChatPage({
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState<"success" | "error">("success");
 
+  // Scroll management
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
+  const prevMessagesLengthRef = useRef(0);
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToastMessage(msg);
@@ -109,13 +118,25 @@ export default function IndividualChatPage({
     setTimeout(() => setToastMessage(""), 3000);
   };
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const handleScroll = () => {
+    if (!scrollContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+    // User is near bottom if within 150px
+    isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 150;
+  };
+
+  const scrollToBottom = (smooth = true) => {
+    messagesEndRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    const lastMsg = messages[messages.length - 1];
+    const isMine = lastMsg && (lastMsg.senderId === currentUserId || lastMsg.senderId === "u_me");
+    if (prevMessagesLengthRef.current === 0 || isMine || isAtBottomRef.current) {
+      scrollToBottom(prevMessagesLengthRef.current > 0);
+    }
+    prevMessagesLengthRef.current = messages.length;
+  }, [messages, currentUserId]);
 
   // Fetch live conversation metadata and messages
   const fetchThreadData = useCallback(async (silent = false) => {
@@ -239,6 +260,8 @@ export default function IndividualChatPage({
                 type: "file",
               }
             : undefined,
+          replyTo: item.reply_to || undefined,
+          edited: item.edited || false,
           createdAt: item.created_at
             ? new Date(item.created_at).toLocaleTimeString([], {
                 hour: "2-digit",
@@ -250,16 +273,38 @@ export default function IndividualChatPage({
 
         setMessages((prev) => {
           if (prev.length === 0) return mapped;
-          const existingIds = new Set(prev.map((m) => m.id));
-          const newItems = mapped.filter((m) => !existingIds.has(m.id));
-          if (newItems.length === 0) return prev;
-          return [...prev, ...newItems];
+          const existingMap = new Map(prev.map((m) => [m.id, m]));
+          for (const item of mapped) {
+            if (existingMap.has(item.id)) {
+              const existing = existingMap.get(item.id)!;
+              if (
+                item.status !== existing.status ||
+                item.edited !== existing.edited ||
+                item.content !== existing.content
+              ) {
+                existingMap.set(item.id, {
+                  ...existing,
+                  status: item.status,
+                  edited: item.edited,
+                  content: item.content,
+                });
+              }
+            } else {
+              existingMap.set(item.id, item);
+            }
+          }
+          return Array.from(existingMap.values());
         });
 
         // Mark incoming unread messages as read
         for (const item of res.items) {
           if (item.sender_id !== myUserId && item.status !== "read") {
             markMessageAsRead(item.id, token).catch(() => {});
+            wsClient.markMessageRead(
+              item.id,
+              targetId,
+              item.sender_id ? [item.sender_id] : undefined
+            );
           }
         }
       } else if (!silent) {
@@ -272,7 +317,7 @@ export default function IndividualChatPage({
       }
       if (!silent) setMessages([]);
     }
-  }, [conversationId, router]);
+  }, [conversationId, currentUserId, router]);
 
   useEffect(() => {
     fetchThreadData();
@@ -300,7 +345,18 @@ export default function IndividualChatPage({
 
         if (matchesThread) {
           setMessages((prev) => {
-            if (prev.some((m) => m.id === msgData.id)) return prev;
+            if (prev.some((m) => m.id === msgData.id)) {
+              return prev.map((m) =>
+                m.id === msgData.id
+                  ? {
+                      ...m,
+                      status: msgData.status || m.status,
+                      content: msgData.content || m.content,
+                      edited: msgData.edited ?? m.edited,
+                    }
+                  : m
+              );
+            }
             return [
               ...prev,
               {
@@ -316,6 +372,8 @@ export default function IndividualChatPage({
                       type: "file",
                     }
                   : undefined,
+                replyTo: msgData.reply_to || undefined,
+                edited: msgData.edited || false,
                 createdAt: msgData.created_at
                   ? new Date(msgData.created_at).toLocaleTimeString([], {
                       hour: "2-digit",
@@ -329,6 +387,11 @@ export default function IndividualChatPage({
 
           if (msgData.sender_id !== currentUserId && token) {
             markMessageAsRead(msgData.id, token).catch(() => {});
+            wsClient.markMessageRead(
+              msgData.id,
+              msgData.conversation_id || activeChatId,
+              [msgData.sender_id]
+            );
           }
         }
       };
@@ -340,7 +403,7 @@ export default function IndividualChatPage({
         if (msgData.conversation_id === conversationId || msgData.conversation_id === activeChatId) {
           setMessages((prev) =>
             prev.map((m) =>
-              m.id === msgData.id ? { ...m, content: msgData.content } : m
+              m.id === msgData.id ? { ...m, content: msgData.content, edited: true } : m
             )
           );
         }
@@ -356,6 +419,19 @@ export default function IndividualChatPage({
               m.id === msgData.id
                 ? { ...m, content: "This message was deleted" }
                 : m
+            )
+          );
+        }
+      };
+
+      const handleMessageRead = (payload: any) => {
+        const data = payload.data || payload;
+        if (!data) return;
+        const activeChatId = conversationRef.current.id;
+        if (data.conversation_id === conversationId || data.conversation_id === activeChatId) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === data.message_id ? { ...m, status: "read" } : m
             )
           );
         }
@@ -382,6 +458,22 @@ export default function IndividualChatPage({
         }
       };
 
+      const handleUserOnline = (payload: any) => {
+        const data = payload.data || payload;
+        if (!data || !data.user_id) return;
+        if (data.user_id === otherUserIdRef.current) {
+          setConversation((prev) => ({ ...prev, isOnline: true }));
+        }
+      };
+
+      const handleUserOffline = (payload: any) => {
+        const data = payload.data || payload;
+        if (!data || !data.user_id) return;
+        if (data.user_id === otherUserIdRef.current) {
+          setConversation((prev) => ({ ...prev, isOnline: false }));
+        }
+      };
+
       const handleMessagesCleared = (payload: any) => {
         const data = payload.data || payload;
         if (!data) return;
@@ -404,10 +496,13 @@ export default function IndividualChatPage({
       wsClient.on("message.new", handleNewMessage);
       wsClient.on("message.updated", handleUpdatedMessage);
       wsClient.on("message.deleted", handleDeletedMessage);
+      wsClient.on("message.read", handleMessageRead);
       wsClient.on("messages.cleared", handleMessagesCleared);
       wsClient.on("conversation.deleted", handleConversationDeleted);
       wsClient.on("typing.start", handleTypingStart);
       wsClient.on("typing.stop", handleTypingStop);
+      wsClient.on("user.online", handleUserOnline);
+      wsClient.on("user.offline", handleUserOffline);
 
       // Gentle polling fallback every 15 seconds to keep messages in sync if sockets drop
       const pollTimer = setInterval(async () => {
@@ -431,6 +526,8 @@ export default function IndividualChatPage({
                       type: "file",
                     }
                   : undefined,
+                replyTo: item.reply_to || undefined,
+                edited: item.edited || false,
                 createdAt: item.created_at
                   ? new Date(item.created_at).toLocaleTimeString([], {
                       hour: "2-digit",
@@ -440,10 +537,27 @@ export default function IndividualChatPage({
                 status: item.status || "sent",
               }));
               setMessages((prev) => {
-                const existingIds = new Set(prev.map((m) => m.id));
-                const newItems = mapped.filter((m) => !existingIds.has(m.id));
-                if (newItems.length === 0) return prev;
-                return [...prev, ...newItems];
+                const existingMap = new Map(prev.map((m) => [m.id, m]));
+                for (const item of mapped) {
+                  if (existingMap.has(item.id)) {
+                    const existing = existingMap.get(item.id)!;
+                    if (
+                      item.status !== existing.status ||
+                      item.edited !== existing.edited ||
+                      item.content !== existing.content
+                    ) {
+                      existingMap.set(item.id, {
+                        ...existing,
+                        status: item.status,
+                        edited: item.edited,
+                        content: item.content,
+                      });
+                    }
+                  } else {
+                    existingMap.set(item.id, item);
+                  }
+                }
+                return Array.from(existingMap.values());
               });
             }
           } catch {}
@@ -454,16 +568,19 @@ export default function IndividualChatPage({
         wsClient.off("message.new", handleNewMessage);
         wsClient.off("message.updated", handleUpdatedMessage);
         wsClient.off("message.deleted", handleDeletedMessage);
+        wsClient.off("message.read", handleMessageRead);
         wsClient.off("messages.cleared", handleMessagesCleared);
         wsClient.off("conversation.deleted", handleConversationDeleted);
         wsClient.off("typing.start", handleTypingStart);
         wsClient.off("typing.stop", handleTypingStop);
+        wsClient.off("user.online", handleUserOnline);
+        wsClient.off("user.offline", handleUserOffline);
         clearInterval(pollTimer);
       };
     }
   }, [fetchThreadData, conversationId, currentUserId, router]);
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (content: string, replyToId?: string) => {
     const token = getStoredToken();
     if (!token) return;
 
@@ -483,7 +600,11 @@ export default function IndividualChatPage({
     try {
       const created = await sendMessage(
         targetConvId,
-        { content: content.trim(), type: "text" },
+        {
+          content: content.trim(),
+          type: "text",
+          reply_to: replyToId,
+        },
         token
       );
       const newMsg: Message = {
@@ -492,6 +613,8 @@ export default function IndividualChatPage({
         senderId: created.sender_id,
         content: created.content,
         type: "text",
+        replyTo: created.reply_to || undefined,
+        edited: created.edited || false,
         createdAt: created.created_at
           ? new Date(created.created_at).toLocaleTimeString([], {
               hour: "2-digit",
@@ -501,6 +624,7 @@ export default function IndividualChatPage({
         status: created.status,
       };
       setMessages((prev) => [...prev, newMsg]);
+      setReplyingTo(null);
     } catch (err: any) {
       const errMsg = err?.message?.toLowerCase() || "";
       if ((errMsg.includes("404") || errMsg.includes("not found")) && otherUserIdRef.current) {
@@ -510,7 +634,11 @@ export default function IndividualChatPage({
           router.replace(`/app/chats/${directConv.id}`);
           const retried = await sendMessage(
             directConv.id,
-            { content: content.trim(), type: "text" },
+            {
+              content: content.trim(),
+              type: "text",
+              reply_to: replyToId,
+            },
             token
           );
           const newMsg: Message = {
@@ -519,6 +647,8 @@ export default function IndividualChatPage({
             senderId: retried.sender_id,
             content: retried.content,
             type: "text",
+            replyTo: retried.reply_to || undefined,
+            edited: retried.edited || false,
             createdAt: retried.created_at
               ? new Date(retried.created_at).toLocaleTimeString([], {
                   hour: "2-digit",
@@ -528,6 +658,7 @@ export default function IndividualChatPage({
             status: retried.status,
           };
           setMessages((prev) => [...prev, newMsg]);
+          setReplyingTo(null);
           return;
         } catch (retryErr: any) {
           showToast(retryErr.message || "Failed to send message", "error");
@@ -536,6 +667,32 @@ export default function IndividualChatPage({
       }
       showToast(err.message || "Failed to send message", "error");
     }
+  };
+
+  const handleSaveEdit = async (id: string, newContent: string) => {
+    const token = getStoredToken();
+    if (!token) return;
+
+    try {
+      await editMessage(id, newContent.trim(), token);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === id ? { ...m, content: newContent.trim(), edited: true } : m
+        )
+      );
+      setEditingMessage(null);
+      showToast("Message updated", "success");
+    } catch (err: any) {
+      showToast(err.message || "Failed to edit message", "error");
+    }
+  };
+
+  const handleTyping = (typing: boolean) => {
+    const targetId = conversationRef.current.id || conversationId;
+    const recipientId =
+      otherUserIdRef.current ||
+      (conversationId.startsWith("c_") ? conversationId.replace(/^c_/, "") : undefined);
+    wsClient.sendTyping(targetId, typing, recipientId ? [recipientId] : undefined);
   };
 
   const handleSendAttachment = async (file: {
@@ -647,7 +804,12 @@ export default function IndividualChatPage({
 
   const handleDeleteMessage = async (id: string) => {
     const token = getStoredToken();
-    if (token) {
+    const targetMsg = messages.find((m) => m.id === id);
+    const isAuthor =
+      targetMsg &&
+      (targetMsg.senderId === currentUserId || targetMsg.senderId === "u_me");
+
+    if (isAuthor && token) {
       try {
         await deleteMessage(id, token);
         setMessages((prev) =>
@@ -655,13 +817,14 @@ export default function IndividualChatPage({
             m.id === id ? { ...m, content: "This message was deleted" } : m
           )
         );
-        showToast("Message deleted");
+        showToast("Message deleted for everyone");
       } catch (err: any) {
         showToast(err.message || "Failed to delete message", "error");
       }
     } else {
+      // Non-author removing message locally for themselves (avoids 403 error)
       setMessages((prev) => prev.filter((m) => m.id !== id));
-      showToast("Message deleted");
+      showToast("Message removed");
     }
   };
 
@@ -791,7 +954,11 @@ export default function IndividualChatPage({
         )}
 
         {/* Message Thread Scroll Area */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-2">
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-2"
+        >
           {/* Subtle date pill */}
           <div className="text-center my-3">
             <span className="px-3 py-1 rounded-full bg-[#F4F6F5] dark:bg-[#1D2723] text-[11px] font-semibold text-[#66736D] dark:text-[#8E9C95] select-none">
@@ -800,17 +967,31 @@ export default function IndividualChatPage({
           </div>
 
           {messages.length > 0 ? (
-            messages.map((message) => (
-              <MessageBubble
-                key={message.id}
-                message={message}
-                isMe={
-                  message.senderId === currentUserId ||
-                  message.senderId === "u_me"
-                }
-                onDelete={handleDeleteMessage}
-              />
-            ))
+            messages.map((message) => {
+              const repliedMsg = message.replyTo
+                ? messages.find((m) => m.id === message.replyTo)
+                : undefined;
+              return (
+                <MessageBubble
+                  key={message.id}
+                  message={message}
+                  isMe={
+                    message.senderId === currentUserId ||
+                    message.senderId === "u_me"
+                  }
+                  repliedMessage={repliedMsg}
+                  onReply={(msg) => {
+                    setEditingMessage(null);
+                    setReplyingTo(msg);
+                  }}
+                  onEdit={(msg) => {
+                    setReplyingTo(null);
+                    setEditingMessage(msg);
+                  }}
+                  onDelete={handleDeleteMessage}
+                />
+              );
+            })
           ) : (
             <div className="p-8 text-center text-xs text-[#66736D] dark:text-[#8E9C95] space-y-1">
               <p className="font-semibold text-[#17211D] dark:text-[#F1F5F3]">
@@ -838,6 +1019,28 @@ export default function IndividualChatPage({
         <MessageInput
           onSendMessage={handleSendMessage}
           onSendAttachment={handleSendAttachment}
+          onTyping={handleTyping}
+          replyingTo={
+            replyingTo
+              ? {
+                  id: replyingTo.id,
+                  senderName:
+                    replyingTo.senderId === currentUserId ? "You" : conversation.name,
+                  content: replyingTo.content,
+                }
+              : null
+          }
+          onCancelReply={() => setReplyingTo(null)}
+          editingMessage={
+            editingMessage
+              ? {
+                  id: editingMessage.id,
+                  content: editingMessage.content,
+                }
+              : null
+          }
+          onCancelEdit={() => setEditingMessage(null)}
+          onSaveEdit={handleSaveEdit}
         />
       </div>
 

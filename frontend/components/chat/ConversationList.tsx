@@ -242,8 +242,26 @@ export function ConversationList({ activeId, className }: ConversationListProps)
       }
     };
 
+    const handleUserOnline = (payload: any) => {
+      const uid = payload.data?.user_id || payload.user_id;
+      if (!uid) return;
+      setConversations((prev) =>
+        prev.map((c) => (c.otherUserId === uid ? { ...c, isOnline: true } : c))
+      );
+    };
+
+    const handleUserOffline = (payload: any) => {
+      const uid = payload.data?.user_id || payload.user_id;
+      if (!uid) return;
+      setConversations((prev) =>
+        prev.map((c) => (c.otherUserId === uid ? { ...c, isOnline: false } : c))
+      );
+    };
+
     wsClient.on("message.new", handleWsMessage);
     wsClient.on("conversation.deleted", handleConversationDeleted);
+    wsClient.on("user.online", handleUserOnline);
+    wsClient.on("user.offline", handleUserOffline);
 
     // Silent periodic refresh every 25 seconds to keep conversations completely in sync
     const pollInterval = setInterval(() => {
@@ -253,23 +271,30 @@ export function ConversationList({ activeId, className }: ConversationListProps)
     return () => {
       wsClient.off("message.new", handleWsMessage);
       wsClient.off("conversation.deleted", handleConversationDeleted);
+      wsClient.off("user.online", handleUserOnline);
+      wsClient.off("user.offline", handleUserOffline);
       clearInterval(pollInterval);
     };
   }, [fetchConversations, fetchContactsList, currentUserId, router]);
 
-  // Auto-switch to General section if active conversation is in General
+  // Clear unread count on active conversation and sync section
   useEffect(() => {
-    if (activeId && conversations.length > 0) {
-      const activeConv = conversations.find(
-        (c) =>
-          c.id === activeId ||
-          (c.otherUserId && activeId === `c_${c.otherUserId}`)
-      );
-      if (activeConv && activeConv.section) {
-        setActiveSection(activeConv.section);
-      }
+    if (activeId) {
+      setConversations((prev) => {
+        const target = prev.find(
+          (c) => c.id === activeId || (c.otherUserId && activeId === `c_${c.otherUserId}`)
+        );
+        if (!target) return prev;
+        if (target.section) {
+          setActiveSection(target.section);
+        }
+        if (target.unreadCount > 0) {
+          return prev.map((c) => (c.id === target.id ? { ...c, unreadCount: 0 } : c));
+        }
+        return prev;
+      });
     }
-  }, [activeId, conversations]);
+  }, [activeId]);
 
   const handleDeleteConversation = async (id: string) => {
     const token = getAuthToken();

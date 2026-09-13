@@ -72,8 +72,18 @@ export function ChatHeader({
             {name}
           </h2>
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#22A06B]" />
-            <span className="text-[11px] font-medium text-[#22A06B]">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isOnline ? "bg-[#22A06B]" : "bg-neutral-400 dark:bg-neutral-600"
+              }`}
+            />
+            <span
+              className={`text-[11px] font-medium ${
+                isOnline
+                  ? "text-[#22A06B]"
+                  : "text-[#66736D] dark:text-[#8E9C95]"
+              }`}
+            >
               {isOnline ? "Online" : "Offline"}
             </span>
           </div>

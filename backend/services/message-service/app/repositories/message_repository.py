@@ -80,15 +80,33 @@ class MessageRepository:
         """
         from app.core.pagination import encode_cursor
 
-        query: Dict[str, Any] = {"conversation_id": str(conversation_id)}
+        conv_oid = _to_object_id(conversation_id)
+        conv_filter: Dict[str, Any] = {
+            "$or": [{"conversation_id": str(conversation_id)}, {"conversation_id": conv_oid}]
+        }
+
         if cursor_time and cursor_id:
             oid = _to_object_id(cursor_id)
-            query["$or"] = [
-                {"created_at": {"$lt": cursor_time}},
-                {"created_at": cursor_time, "_id": {"$lt": oid}},
-            ]
+            query: Dict[str, Any] = {
+                "$and": [
+                    conv_filter,
+                    {
+                        "$or": [
+                            {"created_at": {"$lt": cursor_time}},
+                            {"created_at": cursor_time, "_id": {"$lt": oid}},
+                        ]
+                    },
+                ]
+            }
         elif cursor_time:
-            query["created_at"] = {"$lt": cursor_time}
+            query = {
+                "$and": [
+                    conv_filter,
+                    {"created_at": {"$lt": cursor_time}},
+                ]
+            }
+        else:
+            query = conv_filter
 
         # Query limit + 1 to detect if further pages exist
         cursor = (
@@ -116,7 +134,10 @@ class MessageRepository:
 
     async def count_messages(self, conversation_id: str) -> int:
         """Counts total messages in a conversation."""
-        return await self.collection.count_documents({"conversation_id": str(conversation_id)})
+        conv_oid = _to_object_id(conversation_id)
+        return await self.collection.count_documents({
+            "$or": [{"conversation_id": str(conversation_id)}, {"conversation_id": conv_oid}]
+        })
 
     async def edit_message(
         self, message_id: str, new_content: str

@@ -23,11 +23,33 @@ export interface WebSocketEventFrame {
 export class FluxWebSocketClient {
   private socket: WebSocket | null = null;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private listeners: Map<string, Set<EventCallback>> = new Map();
   private explicitDisconnect = false;
+  private activeToken: string | null = null;
+  private hasWindowListeners = false;
+
+  constructor() {
+    this.setupWindowListeners();
+  }
+
+  private setupWindowListeners(): void {
+    if (typeof window === "undefined" || this.hasWindowListeners) return;
+    this.hasWindowListeners = true;
+
+    window.addEventListener("online", () => {
+      console.info("[FluxChat WS] Network restored. Reconnecting socket...");
+      this.reconnectAttempts = 0;
+      this.connect();
+    });
+
+    window.addEventListener("focus", () => {
+      if (!this.isConnected() && !this.explicitDisconnect) {
+        this.connect();
+      }
+    });
+  }
 
   /**
    * Establishes authenticated WebSocket connection.
@@ -46,6 +68,7 @@ export class FluxWebSocketClient {
       return;
     }
 
+    this.activeToken = token;
     this.explicitDisconnect = false;
     const url = `${WS_URL}?token=${encodeURIComponent(token)}`;
 
@@ -216,21 +239,19 @@ export class FluxWebSocketClient {
   }
 
   /**
-   * Exponential backoff reconnection scheduler.
+   * Continuous exponential backoff reconnection scheduler.
    */
   private scheduleReconnect(): void {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.warn("[FluxChat WS] Max reconnection attempts reached.");
-      return;
-    }
+    if (this.explicitDisconnect) return;
 
-    const backoff = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 15000);
+    // Continuous reconnection with max backoff of 8000ms
+    const backoff = Math.min(1000 * Math.pow(1.5, Math.min(this.reconnectAttempts, 6)), 8000);
     this.reconnectAttempts += 1;
-    console.info(`[FluxChat WS] Reconnecting in ${backoff}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+    console.info(`[FluxChat WS] Reconnecting in ${Math.round(backoff)}ms (attempt ${this.reconnectAttempts})...`);
 
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = setTimeout(() => {
-      this.connect();
+      this.connect(this.activeToken || undefined);
     }, backoff);
   }
 }

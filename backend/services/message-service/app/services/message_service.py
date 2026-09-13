@@ -119,6 +119,12 @@ class MessageService:
         conv = await self._verify_conversation_membership(current_user_id, conversation_id)
         members = [str(m) for m in conv.get("members", [])]
 
+        if payload.type == "text" and not payload.content.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Message content cannot be empty",
+            )
+
         msg_data = {
             "conversation_id": str(conversation_id),
             "sender_id": str(current_user_id),
