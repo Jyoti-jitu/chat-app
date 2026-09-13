@@ -1,10 +1,13 @@
-"""
-Conversation Service encapsulating business logic for 1:1 direct chats and group channels.
-"""
-from typing import Any, Dict, List
+from __future__ import annotations
+from typing import Any, Dict, List, Optional
+import httpx
 from fastapi import HTTPException, status
 from app.core.logging import logger
-from app.repositories.conversation_repository import conversation_repository
+from app.repositories.conversation_repository import (
+    conversation_repository,
+    _to_object_id,
+)
+from shared.database.mongodb import db_manager
 from app.schemas.conversation import (
     ActionSuccessResponse,
     AddMembersPayload,
@@ -302,16 +305,103 @@ class ConversationService:
         updated = await self.repo.remove_member(conversation_id, target_user_id)
         return await self._hydrate_conversation(updated or conv, current_user_id)
 
-    async def leave_conversation(
+    async def _dispatch_realtime_event(
+        self,
+        event_name: str,
+        event_data: dict,
+        conversation_id: str,
+        members: List[str],
+        sender_id: str,
+    ) -> None:
+        """Dispatches real-time event via Redis Pub/Sub and direct WebSocket REST bridge."""
+        try:
+            from shared.redis.client import redis_manager
+            await redis_manager.publish(
+                "fluxchat:events",
+                {
+                    "event": event_name,
+                    "data": event_data,
+                    "conversation_id": str(conversation_id),
+                    "members": members,
+                    "sender_id": str(sender_id),
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to publish {event_name} to Redis: {e}")
+
+        try:
+            ws_url = "http://127.0.0.1:8005"
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                await client.post(
+                    f"{ws_url}/api/v1/events/broadcast",
+                    json={
+                        "event": event_name,
+                        "data": event_data,
+                        "recipient_ids": members,
+                    },
+                )
+        except Exception:
+            pass
+
+    async def delete_conversation(
         self, current_user_id: str, conversation_id: str
     ) -> ActionSuccessResponse:
-        """Allows a user to voluntarily leave a conversation."""
+        """Permanently deletes a conversation and all its messages."""
         conv = await self.repo.find_by_id(conversation_id)
         if not conv:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Conversation not found.",
             )
+
+        members = [str(m) for m in conv.get("members", [])]
+        if current_user_id not in members:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not a participant in this conversation.",
+            )
+
+        # 1. Permanently delete all messages in this conversation from MongoDB
+        db = db_manager.get_database()
+        oid = _to_object_id(conversation_id)
+        await db["messages"].delete_many({
+            "$or": [
+                {"conversation_id": conversation_id},
+                {"conversation_id": oid},
+            ]
+        })
+
+        # 2. Permanently delete the conversation document from MongoDB
+        await self.repo.delete_conversation(conversation_id)
+
+        # 3. Dispatch real-time event to notify participants
+        await self._dispatch_realtime_event(
+            "conversation.deleted",
+            {"conversation_id": conversation_id},
+            conversation_id,
+            members,
+            current_user_id,
+        )
+
+        return ActionSuccessResponse(
+            status="ok",
+            message="Conversation and all messages have been permanently deleted.",
+        )
+
+    async def leave_conversation(
+        self, current_user_id: str, conversation_id: str
+    ) -> ActionSuccessResponse:
+        """Allows a user to leave or delete a conversation."""
+        conv = await self.repo.find_by_id(conversation_id)
+        if not conv:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Conversation not found.",
+            )
+
+        # In a 1:1 direct chat, leaving deletes the conversation and wipes all messages!
+        if conv.get("type") == "direct":
+            return await self.delete_conversation(current_user_id, conversation_id)
 
         members = [str(m) for m in conv.get("members", [])]
         if current_user_id not in members:

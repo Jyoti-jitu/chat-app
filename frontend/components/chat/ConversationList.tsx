@@ -14,7 +14,7 @@ import {
   getConversations,
   createOrGetDirectConversation,
   createGroupConversation,
-  leaveConversation,
+  deleteConversation,
 } from "@/lib/api/chat";
 import { getContacts, ContactItem } from "@/lib/api/contact";
 import { wsClient } from "@/lib/api/websocket";
@@ -226,7 +226,21 @@ export function ConversationList({ activeId, className }: ConversationListProps)
       });
     };
 
+    const handleConversationDeleted = (payload: any) => {
+      const convId =
+        payload.data?.conversation_id ||
+        payload.conversation_id ||
+        payload.data?.id ||
+        payload.id;
+      if (!convId) return;
+      setConversations((prev) => prev.filter((c) => c.id !== convId));
+      if (activeIdRef.current === convId) {
+        router.push("/app/chats");
+      }
+    };
+
     wsClient.on("message.new", handleWsMessage);
+    wsClient.on("conversation.deleted", handleConversationDeleted);
 
     // Silent periodic refresh every 25 seconds to keep conversations completely in sync
     const pollInterval = setInterval(() => {
@@ -235,9 +249,10 @@ export function ConversationList({ activeId, className }: ConversationListProps)
 
     return () => {
       wsClient.off("message.new", handleWsMessage);
+      wsClient.off("conversation.deleted", handleConversationDeleted);
       clearInterval(pollInterval);
     };
-  }, [fetchConversations, fetchContactsList, currentUserId]);
+  }, [fetchConversations, fetchContactsList, currentUserId, router]);
 
   // Auto-switch to General section if active conversation is in General
   useEffect(() => {
@@ -258,9 +273,9 @@ export function ConversationList({ activeId, className }: ConversationListProps)
 
     if (token && !id.startsWith("c1") && !id.startsWith("c2")) {
       try {
-        await leaveConversation(id, token);
+        await deleteConversation(id, token);
       } catch (err: any) {
-        console.warn("Error leaving conversation:", err.message);
+        console.warn("Error deleting conversation:", err.message);
       }
     }
 

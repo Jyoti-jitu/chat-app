@@ -184,6 +184,18 @@ async def test_conversation_lifecycle():
             )
             assert user_b_id not in after_leave.json()["member_ids"]
 
+            # Verify permanent conversation deletion
+            del_res = await ac.delete(
+                f"/api/v1/conversations/{group_id}",
+                headers=headers_a,
+            )
+            assert del_res.status_code == 200
+            assert del_res.json()["status"] == "ok"
+
+            # Verify conversation is gone
+            get_del = await ac.get(f"/api/v1/conversations/{group_id}", headers=headers_a)
+            assert get_del.status_code == 404
+
     finally:
         # Cleanup
         await db.users.delete_many({"_id": {"$in": list(inserted.inserted_ids)}})

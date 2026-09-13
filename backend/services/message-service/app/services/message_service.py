@@ -306,5 +306,22 @@ class MessageService:
 
         return resp
 
+    async def delete_conversation_messages(
+        self, current_user_id: str, conversation_id: str
+    ) -> Dict[str, Any]:
+        """Permanently deletes all messages in a conversation."""
+        conv = await self._verify_conversation_membership(current_user_id, conversation_id)
+        count = await self.repo.delete_messages_by_conversation(conversation_id)
+
+        members = [str(m) for m in conv.get("members", [])] if conv else []
+        await self._dispatch_realtime_event(
+            "messages.cleared",
+            {"conversation_id": conversation_id, "deleted_count": count},
+            conversation_id,
+            members,
+            current_user_id,
+        )
+        return {"status": "ok", "deleted_count": count}
+
 
 message_service = MessageService()

@@ -281,3 +281,54 @@ export async function leaveConversation(
 
   return res.json();
 }
+
+/**
+ * Permanently deletes a conversation and all its messages.
+ */
+export async function deleteConversation(
+  conversationId: string,
+  token?: string
+): Promise<ActionSuccessResponse> {
+  const res = await fetch(`${CHAT_SERVICE_URL}/conversations/${conversationId}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(token),
+    },
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || `Failed to delete conversation (HTTP ${res.status})`
+    );
+  }
+
+  return res.json();
+}
+
+/**
+ * Permanently clears all messages in a conversation.
+ */
+export async function clearConversationMessages(
+  conversationId: string,
+  token?: string
+): Promise<ActionSuccessResponse> {
+  const res = await fetch(`${CHAT_SERVICE_URL}/conversations/${conversationId}/messages`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(token),
+    },
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || `Failed to clear messages (HTTP ${res.status})`
+    );
+  }
+
+  return res.json();
+}
+

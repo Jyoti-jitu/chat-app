@@ -184,5 +184,13 @@ class MessageRepository:
             },
         )
 
+    async def delete_messages_by_conversation(self, conversation_id: str) -> int:
+        """Permanently deletes all messages belonging to a conversation."""
+        oid = _to_object_id(conversation_id)
+        res = await self.collection.delete_many({
+            "$or": [{"conversation_id": conversation_id}, {"conversation_id": oid}]
+        })
+        return res.deleted_count
+
 
 message_repository = MessageRepository()

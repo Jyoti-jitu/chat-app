@@ -26,7 +26,8 @@ import {
 } from "@/lib/api/message";
 import {
   getConversationDetails,
-  leaveConversation,
+  deleteConversation,
+  clearConversationMessages,
   createOrGetDirectConversation,
 } from "@/lib/api/chat";
 import { getUserPublicProfile } from "@/lib/api/user";
@@ -375,9 +376,30 @@ export default function IndividualChatPage({
         }
       };
 
+      const handleMessagesCleared = (payload: any) => {
+        const data = payload.data || payload;
+        if (!data) return;
+        const activeChatId = conversationRef.current.id;
+        if (data.conversation_id === conversationId || data.conversation_id === activeChatId) {
+          setMessages([]);
+          showToast("Chat history was cleared");
+        }
+      };
+
+      const handleConversationDeleted = (payload: any) => {
+        const data = payload.data || payload;
+        if (!data) return;
+        const activeChatId = conversationRef.current.id;
+        if (data.conversation_id === conversationId || data.conversation_id === activeChatId) {
+          router.push("/app/chats");
+        }
+      };
+
       wsClient.on("message.new", handleNewMessage);
       wsClient.on("message.updated", handleUpdatedMessage);
       wsClient.on("message.deleted", handleDeletedMessage);
+      wsClient.on("messages.cleared", handleMessagesCleared);
+      wsClient.on("conversation.deleted", handleConversationDeleted);
       wsClient.on("typing.start", handleTypingStart);
       wsClient.on("typing.stop", handleTypingStop);
 
@@ -426,12 +448,14 @@ export default function IndividualChatPage({
         wsClient.off("message.new", handleNewMessage);
         wsClient.off("message.updated", handleUpdatedMessage);
         wsClient.off("message.deleted", handleDeletedMessage);
+        wsClient.off("messages.cleared", handleMessagesCleared);
+        wsClient.off("conversation.deleted", handleConversationDeleted);
         wsClient.off("typing.start", handleTypingStart);
         wsClient.off("typing.stop", handleTypingStop);
         clearInterval(pollTimer);
       };
     }
-  }, [fetchThreadData, conversationId, currentUserId]);
+  }, [fetchThreadData, conversationId, currentUserId, router]);
 
   const handleSendMessage = async (content: string) => {
     const token = getStoredToken();
@@ -557,22 +581,33 @@ export default function IndividualChatPage({
     }
   };
 
-  const handleConfirmClearMessages = () => {
+  const handleConfirmClearMessages = async () => {
+    const token = getStoredToken();
+    const targetId = conversationRef.current.id || conversationId;
+    if (token && targetId && !targetId.startsWith("c_")) {
+      try {
+        await clearConversationMessages(targetId, token);
+      } catch (err: any) {
+        console.warn("Could not clear messages on backend:", err.message);
+      }
+    }
     setMessages([]);
     setIsClearModalOpen(false);
-    showToast("Chat history cleared");
+    showToast("Chat history cleared permanently", "success");
   };
 
   const handleConfirmDeleteChat = async () => {
     const token = getStoredToken();
-    if (token) {
+    const targetId = conversationRef.current.id || conversationId;
+    if (token && targetId && !targetId.startsWith("c_")) {
       try {
-        await leaveConversation(conversation.id, token);
+        await deleteConversation(targetId, token);
       } catch (err: any) {
-        console.warn("Could not leave conversation on backend:", err.message);
+        console.warn("Could not delete conversation on backend:", err.message);
       }
     }
     setIsDeleteChatModalOpen(false);
+    showToast("Conversation and messages permanently deleted", "success");
     router.push("/app/chats");
   };
 

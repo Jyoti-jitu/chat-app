@@ -103,3 +103,20 @@ async def mark_as_read(
     return await message_service.mark_message_as_read(
         current_user["id"], message_id
     )
+
+
+@router.delete(
+    "/conversations/{conversation_id}/messages",
+    status_code=status.HTTP_200_OK,
+    summary="Delete All Conversation Messages",
+    description="Permanently deletes all messages in a conversation thread.",
+)
+async def delete_conversation_messages(
+    conversation_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Permanently deletes all messages in conversation."""
+    return await message_service.delete_conversation_messages(
+        current_user["id"], conversation_id
+    )
+

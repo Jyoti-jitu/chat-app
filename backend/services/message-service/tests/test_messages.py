@@ -197,6 +197,22 @@ async def test_message_lifecycle():
             assert read_res.status_code == 200
             assert read_res.json()["status"] == "read"
 
+            # 14. Delete all messages in conversation (200)
+            del_msgs_res = await ac.delete(
+                f"/api/v1/conversations/{conv_id}/messages",
+                headers=headers_a,
+            )
+            assert del_msgs_res.status_code == 200
+            assert del_msgs_res.json()["deleted_count"] >= 1
+
+            # 15. Verify thread is now completely empty
+            empty_list = await ac.get(
+                f"/api/v1/conversations/{conv_id}/messages",
+                headers=headers_b,
+            )
+            assert empty_list.status_code == 200
+            assert len(empty_list.json()["items"]) == 0
+
     finally:
         # Cleanup
         await db.users.delete_many({"_id": {"$in": list(inserted.inserted_ids)}})

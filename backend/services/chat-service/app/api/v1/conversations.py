@@ -157,3 +157,21 @@ async def leave_conversation(
     return await conversation_service.leave_conversation(
         current_user["id"], conversation_id
     )
+
+
+@router.delete(
+    "/{conversation_id}",
+    response_model=ActionSuccessResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Delete Conversation and Messages",
+    description="Permanently deletes the conversation thread and all messages.",
+)
+async def delete_conversation(
+    conversation_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> ActionSuccessResponse:
+    """Permanently deletes conversation and all its messages."""
+    return await conversation_service.delete_conversation(
+        current_user["id"], conversation_id
+    )
+
