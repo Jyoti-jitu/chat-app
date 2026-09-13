@@ -245,3 +245,20 @@ AUTH_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
 async def proxy_direct_auth(request: Request, subpath: str = ""):
     return await proxy_request(request, settings.AUTH_SERVICE_URL)
 
+
+@app.get("/api/v1/gateway/logs/{service_name}", tags=["Diagnostics"])
+async def get_service_logs(service_name: str):
+    import os
+    safe_name = "".join(c for c in service_name if c.isalnum() or c == "-")
+    log_path = f"/tmp/{safe_name}.log"
+    if not os.path.exists(log_path):
+        tmp_files = os.listdir("/tmp") if os.path.exists("/tmp") else []
+        return {"error": f"No log found at {log_path}", "files_in_tmp": tmp_files}
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+            return {"service": safe_name, "total_lines": len(lines), "log_tail": lines[-100:]}
+    except Exception as e:
+        return {"error": str(e)}
+
+

@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     SERVICE_NAME: str = "FluxChat API Gateway"
-    VERSION: str = "1.0.0"
+    VERSION: str = "1.0.2"
     ENVIRONMENT: str = "development"
     PORT: int = 8000
     HOST: str = "0.0.0.0"

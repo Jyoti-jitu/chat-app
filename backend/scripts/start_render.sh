@@ -58,8 +58,9 @@ launch_internal_service() {
         cd "$DIR/services/$service_dir"
         export PYTHONPATH="$DIR:$DIR/services/$service_dir:${PYTHONPATH:-}"
         while true; do
-            python -m uvicorn app.main:app --host 127.0.0.1 --port "$port" || true
-            echo "⚠️ $name on port $port exited. Restarting in 2s..."
+            echo "[$(date)] Starting $name on port $port..." >> "/tmp/${service_dir}.log"
+            python -m uvicorn app.main:app --host 127.0.0.1 --port "$port" 2>&1 | tee -a "/tmp/${service_dir}.log" || true
+            echo "⚠️ $name on port $port exited. Restarting in 2s..." | tee -a "/tmp/${service_dir}.log"
             sleep 2
         done
     ) &

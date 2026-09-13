@@ -42,7 +42,8 @@ async def check_service(name: str, url: str) -> Dict[str, Any]:
             "name": name,
             "status": "unreachable",
             "latency_ms": latency_ms,
-            "error": str(exc),
+            "error": f"{type(exc).__name__}: {exc}",
+            "target_url": url,
         }
 
 
