@@ -7,6 +7,12 @@ from typing import List, Optional
 from pydantic import BaseModel, EmailStr, Field
 
 
+class ProfileLink(BaseModel):
+    """Custom profile link with platform label and URL."""
+    title: str = Field(default="Link", max_length=100, description="Platform or label for the link")
+    url: str = Field(..., max_length=1000, description="Destination web address or profile link")
+
+
 class UserProfileUpdate(BaseModel):
     """Payload for updating authenticated user's profile details."""
     name: Optional[str] = Field(None, min_length=2, max_length=100, description="Full display name")
@@ -23,6 +29,7 @@ class UserProfileUpdate(BaseModel):
     cover_image: Optional[str] = Field(None, description="Cover / background image URL or base64 data URI")
     phone: Optional[str] = Field(None, max_length=50, description="Updated phone number")
     website: Optional[str] = Field(None, max_length=500, description="Personal link or website URL")
+    links: Optional[List[ProfileLink]] = Field(None, description="Arbitrary number of custom profile links")
 
 
 class UserProfileResponse(BaseModel):
@@ -35,6 +42,7 @@ class UserProfileResponse(BaseModel):
     avatar: Optional[str] = None
     cover_image: Optional[str] = None
     website: Optional[str] = None
+    links: List[ProfileLink] = Field(default_factory=list)
     bio: Optional[str] = None
     is_active: bool = True
     is_online: bool = False
@@ -51,6 +59,7 @@ class UserPublicProfileResponse(BaseModel):
     avatar: Optional[str] = None
     cover_image: Optional[str] = None
     website: Optional[str] = None
+    links: List[ProfileLink] = Field(default_factory=list)
     bio: Optional[str] = None
     phone: Optional[str] = None
     is_online: bool = False

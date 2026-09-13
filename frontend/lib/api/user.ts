@@ -9,6 +9,11 @@ export const USER_SERVICE_URL =
     ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1`
     : "http://localhost:8002/api/v1");
 
+export interface ProfileLinkItem {
+  title: string;
+  url: string;
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -18,6 +23,7 @@ export interface UserProfile {
   avatar?: string | null;
   cover_image?: string | null;
   website?: string | null;
+  links?: ProfileLinkItem[];
   bio?: string | null;
   is_active: boolean;
   is_online: boolean;
@@ -33,6 +39,7 @@ export interface UserPublicProfile {
   avatar?: string | null;
   cover_image?: string | null;
   website?: string | null;
+  links?: ProfileLinkItem[];
   bio?: string | null;
   phone?: string | null;
   is_online: boolean;
@@ -53,6 +60,7 @@ export interface UpdateProfilePayload {
   avatar?: string;
   cover_image?: string;
   website?: string;
+  links?: ProfileLinkItem[];
   phone?: string;
 }
 

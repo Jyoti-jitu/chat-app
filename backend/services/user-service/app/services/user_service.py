@@ -53,6 +53,22 @@ class UserService:
                 clean_website = f"https://{clean_website}"
             update_dict["website"] = clean_website
 
+        # Sanitize links list
+        if "links" in update_dict and update_dict["links"] is not None:
+            cleaned_links = []
+            for item in update_dict["links"]:
+                title = (item.get("title") if isinstance(item, dict) else getattr(item, "title", "Link")) or "Link"
+                url = (item.get("url") if isinstance(item, dict) else getattr(item, "url", "")) or ""
+                title = str(title).strip()
+                url = str(url).strip()
+                if url:
+                    if not url.startswith(("http://", "https://")):
+                        url = f"https://{url}"
+                    cleaned_links.append({"title": title or "Link", "url": url})
+            update_dict["links"] = cleaned_links
+            if cleaned_links and not update_dict.get("website"):
+                update_dict["website"] = cleaned_links[0]["url"]
+
         # Auto-upload avatar to Cloudinary if sent as Data URI
         if "avatar" in update_dict and update_dict["avatar"] and update_dict["avatar"].startswith("data:image/"):
             try:

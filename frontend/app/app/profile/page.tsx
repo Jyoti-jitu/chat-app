@@ -20,12 +20,16 @@ import {
   Upload,
   Trash2,
   Loader2,
+  Link2,
+  Plus,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
-import { User } from "@/types/user";
+import { User, ProfileLink } from "@/types/user";
 import { getMyProfile, updateMyProfile } from "@/lib/api/user";
 import { getConversations } from "@/lib/api/chat";
 import { getContacts } from "@/lib/api/contact";
@@ -70,6 +74,12 @@ function processImageFile(
   reader.readAsDataURL(file);
 }
 
+export interface EditableLink {
+  id: string;
+  title: string;
+  url: string;
+}
+
 export default function ProfilePage() {
   const [user, setUser] = useState<User>(() => {
     if (typeof window !== "undefined") {
@@ -77,6 +87,9 @@ export default function ProfilePage() {
       if (stored) {
         try {
           const u = JSON.parse(stored);
+          const rawLinks = Array.isArray(u.links) && u.links.length > 0
+            ? u.links
+            : (u.website ? [{ title: "Website", url: u.website }] : []);
           return {
             id: u.id || "",
             name: u.name || "User",
@@ -87,6 +100,7 @@ export default function ProfilePage() {
             avatar: u.avatar || undefined,
             coverImage: u.cover_image || undefined,
             website: u.website || "",
+            links: rawLinks,
             isOnline: true,
             joinedDate: u.created_at
               ? new Date(u.created_at).toLocaleDateString("en-US", {
@@ -107,6 +121,7 @@ export default function ProfilePage() {
       phone: "",
       bio: "",
       website: "",
+      links: [],
       isOnline: true,
       joinedDate: "Recently",
       stats: { chats: 0, connections: 0, groups: 0 },
@@ -120,11 +135,12 @@ export default function ProfilePage() {
   const [username, setUsername] = useState(user.username);
   const [email, setEmail] = useState(user.email);
   const [phone, setPhone] = useState(user.phone || "");
-  const [website, setWebsite] = useState(user.website || "");
   const [bio, setBio] = useState(user.bio || "");
+  const [links, setLinks] = useState<EditableLink[]>([]);
   const [avatar, setAvatar] = useState<string | undefined>(user.avatar);
   const [coverImage, setCoverImage] = useState<string | undefined>(user.coverImage);
 
+  const [copiedLinkIdx, setCopiedLinkIdx] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
@@ -140,12 +156,79 @@ export default function ProfilePage() {
     setUsername(user.username);
     setEmail(user.email);
     setPhone(user.phone || "");
-    setWebsite(user.website || "");
     setBio(user.bio || "");
     setAvatar(user.avatar);
     setCoverImage(user.coverImage);
     setErrorMessage("");
+
+    const initialLinks: EditableLink[] =
+      user.links && user.links.length > 0
+        ? user.links.map((l, idx) => ({
+            id: `link_${idx}_${Date.now()}`,
+            title: l.title || "Link",
+            url: l.url || "",
+          }))
+        : user.website
+        ? [{ id: `link_0_${Date.now()}`, title: "Website", url: user.website }]
+        : [{ id: `link_0_${Date.now()}`, title: "Portfolio", url: "" }];
+
+    setLinks(initialLinks);
     setIsEditModalOpen(true);
+  };
+
+  const handleAddLink = () => {
+    setLinks((prev) => [
+      ...prev,
+      { id: `link_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, title: "", url: "" },
+    ]);
+  };
+
+  const handleRemoveLink = (id: string) => {
+    setLinks((prev) => prev.filter((l) => l.id !== id));
+  };
+
+  const handleUpdateLink = (id: string, field: "title" | "url", value: string) => {
+    setLinks((prev) =>
+      prev.map((l) => {
+        if (l.id !== id) return l;
+        const updated = { ...l, [field]: value };
+        // Auto-detect title from common domain names if title is blank or generic
+        if (field === "url" && (!updated.title || updated.title === "Link" || updated.title === "Portfolio")) {
+          const val = value.toLowerCase();
+          if (val.includes("github.com")) updated.title = "GitHub";
+          else if (val.includes("linkedin.com")) updated.title = "LinkedIn";
+          else if (val.includes("twitter.com") || val.includes("x.com")) updated.title = "Twitter / X";
+          else if (val.includes("instagram.com")) updated.title = "Instagram";
+          else if (val.includes("youtube.com") || val.includes("youtu.be")) updated.title = "YouTube";
+          else if (val.includes("discord.gg") || val.includes("discord.com")) updated.title = "Discord";
+          else if (val.includes("behance.net")) updated.title = "Behance";
+          else if (val.includes("dribbble.com")) updated.title = "Dribbble";
+          else if (val.includes("medium.com") || val.includes("substack.com")) updated.title = "Blog";
+        }
+        return updated;
+      })
+    );
+  };
+
+  const handleAddChip = (chipTitle: string) => {
+    setLinks((prev) => {
+      const last = prev[prev.length - 1];
+      if (last && !last.title && !last.url) {
+        return prev.map((l) => (l.id === last.id ? { ...l, title: chipTitle } : l));
+      }
+      return [
+        ...prev,
+        { id: `link_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, title: chipTitle, url: "" },
+      ];
+    });
+  };
+
+  const handleCopyLink = (url: string, index: number) => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(url);
+      setCopiedLinkIdx(index);
+      setTimeout(() => setCopiedLinkIdx(null), 2000);
+    }
   };
 
   // Fetch live profile and real counts from User & Chat Services
@@ -180,6 +263,13 @@ export default function ProfilePage() {
               })
             : "Recently";
 
+          const rawLinks =
+            Array.isArray(u.links) && u.links.length > 0
+              ? u.links
+              : u.website
+              ? [{ title: "Website", url: u.website }]
+              : [];
+
           setUser({
             id: u.id,
             name: u.name,
@@ -190,6 +280,7 @@ export default function ProfilePage() {
             avatar: u.avatar || undefined,
             coverImage: u.cover_image || undefined,
             website: u.website || "",
+            links: rawLinks,
             isOnline: u.is_online,
             joinedDate: joinedFormatted,
             stats: {
@@ -203,7 +294,6 @@ export default function ProfilePage() {
           setBio(u.bio || "");
           setEmail(u.email);
           setPhone(u.phone || "");
-          setWebsite(u.website || "");
           setAvatar(u.avatar || undefined);
           setCoverImage(u.cover_image || undefined);
 
@@ -257,13 +347,23 @@ export default function ProfilePage() {
     setErrorMessage("");
 
     try {
+      const cleanedLinks = links
+        .filter((l) => l.url.trim().length > 0)
+        .map((l) => ({
+          title: l.title.trim() || "Link",
+          url: l.url.trim().startsWith("http") ? l.url.trim() : `https://${l.url.trim()}`,
+        }));
+
+      const primaryWebsite = cleanedLinks.length > 0 ? cleanedLinks[0].url : undefined;
+
       const updated = await updateMyProfile({
         name: name.trim(),
         username: username.trim().toLowerCase() || undefined,
         bio: bio.trim(),
         email: email.trim().toLowerCase(),
         phone: phone.trim() || undefined,
-        website: website.trim() || undefined,
+        website: primaryWebsite,
+        links: cleanedLinks,
         avatar: avatar || undefined,
         cover_image: coverImage || undefined,
       });
@@ -276,6 +376,7 @@ export default function ProfilePage() {
         email: updated.email,
         phone: updated.phone || "",
         website: updated.website || "",
+        links: updated.links || cleanedLinks,
         avatar: updated.avatar || undefined,
         coverImage: updated.cover_image || undefined,
       };
@@ -386,8 +487,31 @@ export default function ProfilePage() {
               {user.bio || "No bio yet. Click Edit Profile to add a personal bio."}
             </p>
 
-            {/* Dynamic Link / Website Pill */}
-            {user.website && (
+            {/* Dynamic Link / Social Pills */}
+            {user.links && user.links.length > 0 ? (
+              <div className="mt-3.5 flex flex-wrap items-center gap-2">
+                {user.links.map((link, idx) => {
+                  const cleanHost = link.url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+                  return (
+                    <a
+                      key={idx}
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={`${link.title}: ${link.url}`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-500/20 transition-all shadow-2xs hover:shadow-xs group"
+                    >
+                      <Globe className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400 group-hover:rotate-12 transition-transform" />
+                      <span className="font-bold">{link.title || "Link"}</span>
+                      <span className="text-[11px] opacity-70 truncate max-w-[130px]">
+                        {cleanHost}
+                      </span>
+                      <ExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100 transition-opacity" />
+                    </a>
+                  );
+                })}
+              </div>
+            ) : user.website ? (
               <div className="mt-3 flex items-center gap-2">
                 <a
                   href={user.website}
@@ -402,7 +526,7 @@ export default function ProfilePage() {
                   <ExternalLink className="w-3 h-3 opacity-70" />
                 </a>
               </div>
-            )}
+            ) : null}
 
             {successNotice && (
               <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#EAF5F0] dark:bg-[rgba(34,160,107,0.18)] text-[#168F67] dark:text-[#22A06B] text-xs font-semibold">
@@ -502,46 +626,140 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Website / Portfolio Link */}
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-[#F4F6F5] dark:bg-[#1D2723] text-[#168F67] dark:text-[#22A06B] flex items-center justify-center shrink-0">
-                <Globe className="w-4 h-4" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-[#66736D] dark:text-[#8E9C95]">Website / Link</p>
-                {user.website ? (
-                  <a
-                    href={user.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 truncate"
-                  >
-                    <span className="truncate">{user.website}</span>
-                    <ExternalLink className="w-3 h-3 shrink-0" />
-                  </a>
-                ) : (
-                  <span
-                    onClick={openEditModal}
-                    className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold cursor-pointer hover:underline"
-                  >
-                    + Add your personal link
-                  </span>
-                )}
-              </div>
-            </div>
-
             {/* Member Since */}
-            <div className="flex items-start gap-3 sm:col-span-2">
+            <div className="flex items-start gap-3">
               <div className="w-9 h-9 rounded-xl bg-[#F4F6F5] dark:bg-[#1D2723] text-[#168F67] dark:text-[#22A06B] flex items-center justify-center shrink-0">
                 <Calendar className="w-4 h-4" />
               </div>
               <div>
                 <p className="text-xs text-[#66736D] dark:text-[#8E9C95]">Member since</p>
                 <p className="text-sm font-bold text-[#17211D] dark:text-[#F1F5F3]">
-                  {user.joinedDate || "Recently"}
+                  {user.joinedDate}
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* Web & Social Links Section */}
+          <div className="pt-4 border-t border-[#E6EBE8] dark:border-[#212E29]">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Link2 className="w-4 h-4 text-[#168F67] dark:text-[#22A06B]" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#66736D] dark:text-[#8E9C95]">
+                  Web & Social Links ({user.links?.length || (user.website ? 1 : 0)})
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={openEditModal}
+                className="text-xs font-semibold text-[var(--primary)] hover:underline flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add / Manage links</span>
+              </button>
+            </div>
+
+            {user.links && user.links.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {user.links.map((link, idx) => {
+                  const cleanHost = link.url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+                  const isCopied = copiedLinkIdx === idx;
+                  return (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-3 rounded-2xl border border-[#E6EBE8] dark:border-[#212E29] bg-[#F7F9F8] dark:bg-[#131A17] hover:border-[var(--primary)]/40 transition-colors group"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                        <div className="w-9 h-9 rounded-xl bg-white dark:bg-[#1C2622] text-[#168F67] dark:text-[#22A06B] flex items-center justify-center shrink-0 border border-[#E6EBE8] dark:border-[#273630] group-hover:scale-105 transition-transform">
+                          <Globe className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-bold text-[#17211D] dark:text-[#F1F5F3] truncate">
+                            {link.title || "Link"}
+                          </div>
+                          <a
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] text-[#66736D] dark:text-[#8E9C95] hover:text-[var(--primary)] hover:underline truncate block"
+                          >
+                            {cleanHost}
+                          </a>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleCopyLink(link.url, idx)}
+                          title="Copy link"
+                          className="p-1.5 rounded-lg text-[#66736D] dark:text-[#8E9C95] hover:text-[#17211D] dark:hover:text-[#F1F5F3] hover:bg-white dark:hover:bg-[#1C2622] transition-colors"
+                        >
+                          {isCopied ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                        <a
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Open link"
+                          className="p-1.5 rounded-lg text-[#66736D] dark:text-[#8E9C95] hover:text-[var(--primary)] hover:bg-white dark:hover:bg-[#1C2622] transition-colors"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : user.website ? (
+              <div className="p-3 rounded-2xl border border-[#E6EBE8] dark:border-[#212E29] bg-[#F7F9F8] dark:bg-[#131A17] flex items-center justify-between">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-white dark:bg-[#1C2622] text-[#168F67] dark:text-[#22A06B] flex items-center justify-center shrink-0">
+                    <Globe className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-[#17211D] dark:text-[#F1F5F3]">Website</p>
+                    <a
+                      href={user.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline truncate block"
+                    >
+                      {user.website}
+                    </a>
+                  </div>
+                </div>
+                <a
+                  href={user.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-xl"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </div>
+            ) : (
+              <div
+                onClick={openEditModal}
+                className="p-5 rounded-2xl border border-dashed border-[#E6EBE8] dark:border-[#212E29] bg-[#F7F9F8]/50 dark:bg-[#151D1A]/50 flex flex-col items-center justify-center gap-2 text-center cursor-pointer hover:border-[var(--primary)]/50 transition-colors group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-[var(--primary-light)] text-[var(--primary)] flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Plus className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-[#17211D] dark:text-[#F1F5F3]">
+                    No links added yet
+                  </p>
+                  <p className="text-[11px] text-[#66736D] dark:text-[#8E9C95] mt-0.5">
+                    Click to add your GitHub, LinkedIn, Twitter, portfolio, or any social profiles.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -714,22 +932,91 @@ export default function ProfilePage() {
             />
 
             <Input
-              id="editWebsite"
-              label="Website or Social Link"
-              value={website}
-              onChange={(e) => setWebsite(e.target.value)}
-              placeholder="e.g. https://myportfolio.com"
+              id="editEmail"
+              label="Email Address"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
             />
+          </div>
 
-            <div className="sm:col-span-2">
-              <Input
-                id="editEmail"
-                label="Email Address"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+          {/* Dynamic Unlimited Links Manager */}
+          <div className="space-y-3 pt-2 border-t border-[#E6EBE8] dark:border-[#212E29] text-left">
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-xs font-bold text-[#17211D] dark:text-[#F1F5F3]">
+                  Social & Web Links ({links.length})
+                </label>
+                <p className="text-[11px] text-[#66736D] dark:text-[#8E9C95]">
+                  Add as many links as you want (GitHub, LinkedIn, Twitter/X, portfolio, etc.)
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleAddLink}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--primary-light)] text-[var(--primary)] hover:bg-[var(--primary)] hover:text-white text-xs font-bold transition-all active:scale-95 shadow-2xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Link</span>
+              </button>
+            </div>
+
+            {/* Quick add chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px]">
+              <span className="text-[#8E9C95] shrink-0 font-medium">Quick add:</span>
+              {["GitHub", "LinkedIn", "Twitter / X", "Portfolio", "Instagram", "YouTube", "Discord", "Blog"].map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => handleAddChip(chip)}
+                  className="px-2.5 py-0.5 rounded-full border border-[#E6EBE8] dark:border-[#273630] bg-[#F7F9F8] dark:bg-[#1A2420] text-[#52635B] dark:text-[#A1B3AB] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:bg-white dark:hover:bg-[#151D1A] shrink-0 transition-colors"
+                >
+                  + {chip}
+                </button>
+              ))}
+            </div>
+
+            {/* Link Rows */}
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              {links.map((linkItem) => (
+                <div
+                  key={linkItem.id}
+                  className="flex items-center gap-2 p-2 rounded-2xl bg-[#F7F9F8] dark:bg-[#1A2420] border border-[#E6EBE8] dark:border-[#273630]"
+                >
+                  <div className="w-32 shrink-0">
+                    <input
+                      type="text"
+                      placeholder="Label (e.g. GitHub)"
+                      value={linkItem.title}
+                      onChange={(e) => handleUpdateLink(linkItem.id, "title", e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-[#151D1A] border border-[#E6EBE8] dark:border-[#212E29] text-xs font-semibold text-[#17211D] dark:text-[#F1F5F3] focus:outline-none focus:border-[var(--primary)]"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <input
+                      type="url"
+                      placeholder="URL (e.g. https://github.com/...)"
+                      value={linkItem.url}
+                      onChange={(e) => handleUpdateLink(linkItem.id, "url", e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-[#151D1A] border border-[#E6EBE8] dark:border-[#212E29] text-xs text-[#17211D] dark:text-[#F1F5F3] focus:outline-none focus:border-[var(--primary)]"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveLink(linkItem.id)}
+                    title="Remove link"
+                    className="p-1.5 text-[#8E9C95] hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+              {links.length === 0 && (
+                <p className="text-xs text-[#8E9C95] text-center py-3 italic">
+                  No links added yet. Click &quot;Add Link&quot; or a quick chip above to add your first link.
+                </p>
+              )}
             </div>
           </div>
 

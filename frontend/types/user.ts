@@ -4,6 +4,11 @@ export interface UserStats {
   groups: number;
 }
 
+export interface ProfileLink {
+  title: string;
+  url: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -13,6 +18,7 @@ export interface User {
   avatar?: string;
   coverImage?: string;
   website?: string;
+  links?: ProfileLink[];
   isOnline: boolean;
   lastSeen?: string;
   bio?: string;
