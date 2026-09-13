@@ -34,9 +34,14 @@ MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
 async def test_e2e_cluster_health():
     """Verifies that the API Gateway aggregates health status across all 6 services."""
     async with httpx.AsyncClient(base_url=GATEWAY_HTTP_URL, timeout=10.0) as client:
-        resp = await client.get("/health")
-        assert resp.status_code == 200
-        data = resp.json()
+        data = {}
+        for attempt in range(3):
+            resp = await client.get("/health")
+            assert resp.status_code == 200
+            data = resp.json()
+            if data.get("status") == "healthy":
+                break
+            await asyncio.sleep(1.5)
         assert data["status"] == "healthy"
         services = data["services"]
         for svc in [

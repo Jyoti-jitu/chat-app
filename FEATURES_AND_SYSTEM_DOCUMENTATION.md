@@ -15,6 +15,9 @@ This document provides a comprehensive technical reference for all features, arc
 8. [Messaging Glitch & Real-Time Sync Fixes](#-8-messaging-glitch--real-time-sync-fixes)
 9. [New Files & Architectural Inventory](#-9-new-files--architectural-inventory)
 10. [Production Environment Configuration](#-10-production-environment-configuration)
+11. [Interactive API Documentation & Gateways](#-11-interactive-api-documentation--gateways)
+12. [Standardized Error Envelope & Status Codes](#-12-standardized-error-envelope--status-codes)
+13. [Complete API Endpoint Catalog](#-13-complete-api-endpoint-catalog)
 
 ---
 
@@ -228,6 +231,137 @@ NEXT_PUBLIC_API_URL=https://your-backend.onrender.com
 NEXT_PUBLIC_WS_URL=wss://your-backend.onrender.com/ws
 NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=pygfnzvb
 ```
+
+---
+
+## 📖 11. Interactive API Documentation & Gateways
+
+All microservice endpoints are exposed and reverse-proxied through the unified **API Gateway** on port `8000`:
+
+| Portal | URL | Description |
+|---|---|---|
+| **Multi-Spec Swagger UI** | `http://localhost:8000/docs` | Interactive API explorer with dropdown selector for all 6 downstream microservices |
+| **ReDoc UI** | `http://localhost:8000/redoc` | Clean, responsive technical reference documentation |
+| **Dynamic OpenAPI JSON** | `http://localhost:8000/openapi.json` | Live OpenAPI 3.1 aggregated schema for Postman, Insomnia, or API tooling |
+| **Auth Service Docs** | `http://localhost:8001/docs` | Dedicated Auth Service Swagger UI |
+| **User Service Docs** | `http://localhost:8002/docs` | Dedicated User & Contacts Service Swagger UI |
+| **Chat Service Docs** | `http://localhost:8003/docs` | Dedicated Chat & Conversation Service Swagger UI |
+| **Message Service Docs**| `http://localhost:8004/docs` | Dedicated Message & Reaction Service Swagger UI |
+| **WebSocket Docs** | `http://localhost:8005/docs` | Dedicated WebSocket & Presence Service Swagger UI |
+| **Notification Docs** | `http://localhost:8006/docs` | Dedicated Notification Service Swagger UI |
+
+### Authentication & Authorization Headers
+
+Protected HTTP endpoints require a standard Bearer token in the `Authorization` header:
+```http
+Authorization: Bearer <access_token>
+```
+
+For real-time WebSocket connections, pass the token as a query parameter:
+```
+ws://localhost:8000/ws?token=<access_token>
+```
+
+---
+
+## 🛡️ 12. Standardized Error Envelope & Status Codes
+
+All microservices return errors in a uniform RFC-style JSON envelope:
+
+```json
+{
+  "error": {
+    "code": "USER_NOT_FOUND",
+    "message": "The requested user does not exist",
+    "request_id": "req_8bc739f12a",
+    "timestamp": "2026-09-12T19:00:00Z",
+    "details": null
+  },
+  "detail": "The requested user does not exist"
+}
+```
+
+### Standard Error Status Codes
+- `400 BAD REQUEST`: Malformed payload or validation failure.
+- `401 UNAUTHORIZED`: Missing, invalid, or expired JWT access token.
+- `403 FORBIDDEN`: Insufficient permissions or ownership violation.
+- `404 NOT FOUND`: Entity does not exist.
+- `409 CONFLICT`: Unique constraint violation (e.g. username or email already registered).
+- `429 TOO MANY REQUESTS`: Rate limit exceeded (`Retry-After` header provided).
+- `500 INTERNAL SERVER ERROR`: Unhandled exception within the microservice.
+- `502 BAD GATEWAY`: Gateway failed to communicate with a downstream microservice.
+
+---
+
+## 🔌 13. Complete API Endpoint Catalog
+
+### Authentication (`/api/v1/auth`)
+- `POST /api/v1/auth/register` — Register a new account (`username`, `email`, `password`, optional `phone`).
+- `POST /api/v1/auth/login` — Authenticate using email or phone with password. Returns access & refresh tokens.
+- `POST /api/v1/auth/refresh` — Issue a fresh access token using a valid refresh token.
+- `POST /api/v1/auth/logout` — Revoke active tokens and terminate session.
+- `GET  /api/v1/auth/me` — Retrieve current authenticated user profile.
+- `POST /api/v1/auth/send-otp` — Dispatch 6-digit SMS verification code.
+- `POST /api/v1/auth/verify-otp` — Verify SMS OTP and authenticate.
+
+### Users & Directory (`/api/v1/users`)
+- `GET  /api/v1/users/me` — Get current user profile details.
+- `PUT  /api/v1/users/me` — Update display name, bio, avatar, cover image, phone, website, or settings.
+- `GET  /api/v1/users/search?q={query}` — Search users by username, email, or telephone.
+- `GET  /api/v1/users/{id}` — Retrieve public user profile.
+
+### Cloudinary Media Storage (`/api/v1/media`)
+- `POST /api/v1/media/upload` — Upload multipart file to Cloudinary (returns secure HTTPS URL, size, and metadata).
+- `POST /api/v1/media/upload-base64` — Upload base64 / data URI string directly to Cloudinary.
+
+### Status Stories (`/api/v1/status`)
+- `GET  /api/v1/status` — Get active 24-hour status stories from connected contacts.
+- `POST /api/v1/status` — Post a new photo or text status story (auto-expires in 24 hours).
+- `DELETE /api/v1/status/{slide_id}` — Delete a specific status slide.
+- `DELETE /api/v1/status` — Delete all status stories posted by current user.
+
+### Contacts & Connections (`/api/v1/contacts`)
+- `GET  /api/v1/contacts` — List current user's connected contacts.
+- `DELETE /api/v1/contacts/{contact_id}` — Remove contact from roster.
+- `POST /api/v1/contacts/requests` — Send a connection request to `recipient_id`.
+- `GET  /api/v1/contacts/requests` — List received and sent pending connection requests.
+- `POST /api/v1/contacts/requests/{id}/accept` — Accept pending connection request.
+- `POST /api/v1/contacts/requests/{id}/reject` — Reject pending connection request.
+- `POST /api/v1/contacts/requests/{id}/cancel` — Cancel sent connection request.
+
+### Direct & Group Conversations (`/api/v1/conversations`)
+- `GET    /api/v1/conversations` — Fetch all user conversations with last message, unread count, and metadata.
+- `POST   /api/v1/conversations/direct` — Get or create a 1:1 direct chat with `user_id`.
+- `POST   /api/v1/conversations/groups` — Create a new group conversation channel (`name`, `members`, `description`, `is_private`, `join_policy`).
+- `GET    /api/v1/conversations/public` — Discover open public channels and communities.
+- `POST   /api/v1/conversations/{id}/join` — Join a public group or submit a join request.
+- `GET    /api/v1/conversations/{id}/requests` — List pending join requests (Admin only).
+- `POST   /api/v1/conversations/{id}/requests/{user_id}/approve` — Approve member join request (Admin only).
+- `POST   /api/v1/conversations/{id}/requests/{user_id}/reject` — Reject member join request (Admin only).
+- `PUT    /api/v1/conversations/{id}/policy` — Update group join policy (`anyone` vs `admin_approval`, Admin only).
+- `DELETE /api/v1/conversations/{id}` — Permanently purge conversation thread and all messages from database.
+
+### Messages & Reactions (`/api/v1/messages`)
+- `GET    /api/v1/messages/conversation/{id}` — Cursor-paginated message history with Redis caching.
+- `POST   /api/v1/messages` — Send a new message (text, media attachment, reply-to).
+- `PUT    /api/v1/messages/{id}` — Edit existing message content (author only).
+- `DELETE /api/v1/messages/{id}` — Delete message (for self or everyone).
+- `POST   /api/v1/messages/{id}/reactions` — Toggle emoji reaction on message.
+- `POST   /api/v1/messages/{id}/pin` — Pin/unpin message in conversation.
+- `POST   /api/v1/messages/{id}/read` — Send read receipt acknowledgment.
+
+### Notifications (`/api/v1/notifications`)
+- `GET    /api/v1/notifications` — Retrieve notification feed with unread counts.
+- `POST   /api/v1/notifications/{id}/read` — Mark notification as read.
+- `DELETE /api/v1/notifications/{id}` — Dismiss individual notification.
+- `DELETE /api/v1/notifications` — Clear all user notifications.
+
+### WebSocket Real-Time Gateway (`ws://.../ws`)
+- `message:send` — Client dispatches a new chat message.
+- `message:new` — Server delivers real-time message to recipients.
+- `presence:status` — User online / away / offline heartbeat.
+- `typing:start` / `typing:stop` — Ephemeral typing indicators.
+- `receipt:delivery` / `receipt:read` — Real-time double checkmarks sync.
 
 ---
 

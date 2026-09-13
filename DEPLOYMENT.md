@@ -68,7 +68,7 @@ You can deploy the backend using either **Method A (Render Blueprint - Recommend
 
 1. Go to [Render Dashboard](https://dashboard.render.com/) -> Click **New +** -> **Blueprint**.
 2. Connect your GitHub repository (`chat-app`).
-3. Render will automatically read [`render.yaml`](../render.yaml).
+3. Render will automatically read [`render.yaml`](render.yaml).
 4. Fill in the prompted secret variables:
    - `MONGODB_URL`: Your MongoDB Atlas connection string from Step 1.
    - `TWO_FACTOR_API_KEY`: Your 2Factor API key (for Indian SMS/voice OTP).

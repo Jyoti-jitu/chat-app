@@ -3,8 +3,10 @@
 FluxChat is a full-featured, responsive, and beautifully designed modern messaging and collaboration platform built with Next.js 16 (App Router), TypeScript, Tailwind CSS, and 7 distributed FastAPI microservices backed by MongoDB Atlas.
 
 > 📖 **Quick Links:**
-> - [RUNNING.md](RUNNING.md) — Step-by-step startup guide, commands, and troubleshooting.
-> - [PROJECT_FILES_AND_ARCHITECTURE_SUMMARY.md](PROJECT_FILES_AND_ARCHITECTURE_SUMMARY.md) — Comprehensive master summary of all files, models, and architectural components.
+> - [RUNNING.md](RUNNING.md) — Step-by-step startup guide, local execution, and troubleshooting.
+> - [DEPLOYMENT.md](DEPLOYMENT.md) — 10-minute production deployment guide for Vercel (Frontend) & Render (Backend).
+> - [FEATURES_AND_SYSTEM_DOCUMENTATION.md](FEATURES_AND_SYSTEM_DOCUMENTATION.md) — Enterprise features, Cloudinary media, 24h stories, data purge, group management, and complete API catalog.
+> - [PROJECT_FILES_AND_ARCHITECTURE_SUMMARY.md](PROJECT_FILES_AND_ARCHITECTURE_SUMMARY.md) — Exhaustive master inventory of all files, models, and architectural components.
 
 ---
 

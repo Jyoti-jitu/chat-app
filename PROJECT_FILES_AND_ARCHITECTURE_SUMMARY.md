@@ -82,15 +82,15 @@ FluxChat is built on an enterprise-grade, distributed microservices architecture
 
 ---
 
-### B. Documentation (`docs/`)
+### B. Core Documentation & Guides (Root)
 
 | File Path | Why It Was Created & What It Does |
 |---|---|
-| `docs/API_DOCUMENTATION.md` | Documents REST API endpoints, schemas, headers, authentication flows, and WebSocket event payloads. |
-| `docs/DEPLOYMENT_VERCEL_RENDER.md` | Step-by-step production deployment guide for deploying Next.js frontend to Vercel and backend services to Render. |
-| `docs/ENVIRONMENT_CONFIG.md` | 12-factor configuration guide explaining every required environment variable, type, default, and validation rules. |
-| `docs/PRODUCTION_SCALING.md` | Architecture guide covering horizontal scaling, connection pooling, Redis caching, and WebSocket cluster strategies. |
-| `docs/openapi/*.json` | Exported OpenAPI 3.0 schemas for API Gateway and all 6 individual microservices for integration and tooling. |
+| `README.md` | Master project introduction, features overview, quickstart instructions, and architecture breakdown. |
+| `RUNNING.md` | Complete local and production operations manual, port matrix, environment configuration, troubleshooting, and commands. |
+| `DEPLOYMENT.md` | Step-by-step production deployment guide for deploying Next.js frontend to Vercel and backend cluster to Render. |
+| `FEATURES_AND_SYSTEM_DOCUMENTATION.md` | Master technical specification covering all enterprise features, Cloudinary media, 24h stories, purge mechanism, group policy, Redis caching, and full API endpoint catalog. |
+| `PROJECT_FILES_AND_ARCHITECTURE_SUMMARY.md` | Exhaustive component-by-component file index, port mappings, data schemas, and event flows across the repository. |
 
 ---
 
