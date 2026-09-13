@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     NOTIFICATION_SERVICE_URL: str = "http://127.0.0.1:8006"
 
     # Rate Limiting
-    RATE_LIMIT_DEFAULT: int = 120
+    RATE_LIMIT_DEFAULT: int = 1200
     RATE_LIMIT_AUTH: int = 25
     RATE_LIMIT_WINDOW_SECONDS: int = 60
     RATE_LIMIT_ENABLED: bool = True

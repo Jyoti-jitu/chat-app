@@ -47,7 +47,29 @@ export default function IndividualChatPage({
   const resolvedParams = use(params);
   const conversationId = resolvedParams.conversationId;
 
-  const [currentUserId, setCurrentUserId] = useState<string>("u_me");
+  const [currentUserId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const userStr = localStorage.getItem("fluxchat_user");
+      if (userStr) {
+        try {
+          const u = JSON.parse(userStr);
+          if (u.id) return u.id;
+        } catch {}
+      }
+      const token = getStoredToken();
+      if (token) {
+        try {
+          const parts = token.split(".");
+          if (parts.length === 3) {
+            const payload = JSON.parse(atob(parts[1]));
+            if (payload.sub) return payload.sub;
+          }
+        } catch {}
+      }
+    }
+    return "u_me";
+  });
+
   const [conversation, setConversation] = useState<{
     id: string;
     name: string;
@@ -57,6 +79,11 @@ export default function IndividualChatPage({
     id: conversationId,
     name: "Chat",
   });
+
+  const conversationRef = useRef(conversation);
+  useEffect(() => {
+    conversationRef.current = conversation;
+  }, [conversation]);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
@@ -88,32 +115,6 @@ export default function IndividualChatPage({
     scrollToBottom();
   }, [messages]);
 
-  // Decode current user ID from token or stored user
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const userStr = localStorage.getItem("fluxchat_user");
-      if (userStr) {
-        try {
-          const u = JSON.parse(userStr);
-          if (u.id) setCurrentUserId(u.id);
-        } catch {}
-      }
-    }
-
-    const token = getStoredToken();
-    if (token) {
-      try {
-        const parts = token.split(".");
-        if (parts.length === 3) {
-          const payload = JSON.parse(atob(parts[1]));
-          if (payload.sub) setCurrentUserId(payload.sub);
-        }
-      } catch (e) {
-        console.warn("Could not decode user token sub:", e);
-      }
-    }
-  }, []);
-
   // Fetch live conversation metadata and messages
   const fetchThreadData = useCallback(async (silent = false) => {
     const token = getStoredToken();
@@ -123,31 +124,14 @@ export default function IndividualChatPage({
     let targetId = conversationId;
 
     let myUserId = currentUserId;
-    if (!myUserId) {
-      if (typeof window !== "undefined") {
-        const userStr = localStorage.getItem("fluxchat_user");
-        if (userStr) {
-          try {
-            const u = JSON.parse(userStr);
-            if (u.id) {
-              myUserId = u.id;
-              setCurrentUserId(u.id);
-            }
-          } catch {}
+    if (!myUserId || myUserId === "u_me") {
+      try {
+        const parts = token.split(".");
+        if (parts.length === 3) {
+          const payload = JSON.parse(atob(parts[1]));
+          if (payload.sub) myUserId = payload.sub;
         }
-      }
-      if (!myUserId && token) {
-        try {
-          const parts = token.split(".");
-          if (parts.length === 3) {
-            const payload = JSON.parse(atob(parts[1]));
-            if (payload.sub) {
-              myUserId = payload.sub;
-              setCurrentUserId(payload.sub);
-            }
-          }
-        } catch {}
-      }
+      } catch {}
     }
 
     // 1. Fetch conversation details
@@ -205,7 +189,7 @@ export default function IndividualChatPage({
     }
 
     // Determine if conversation is in General section (pending connection)
-    if (otherUserId) {
+    if (otherUserId && !silent) {
       try {
         const [contactsRes, requestsRes] = await Promise.all([
           getContacts(token).catch(() => ({ items: [] })),
@@ -282,7 +266,7 @@ export default function IndividualChatPage({
       }
       if (!silent) setMessages([]);
     }
-  }, [conversationId, currentUserId, router]);
+  }, [conversationId, router]);
 
   useEffect(() => {
     fetchThreadData();
@@ -300,10 +284,11 @@ export default function IndividualChatPage({
         const msgData = payload.data || payload;
         if (!msgData) return;
 
+        const activeChatId = conversationRef.current.id;
         const recipientId = conversationId.startsWith("c_") ? conversationId.replace(/^c_/, "") : null;
         const matchesThread =
           msgData.conversation_id === conversationId ||
-          msgData.conversation_id === conversation.id ||
+          msgData.conversation_id === activeChatId ||
           (recipientId && (msgData.sender_id === recipientId || msgData.recipient_id === recipientId));
 
         if (matchesThread) {
@@ -344,7 +329,8 @@ export default function IndividualChatPage({
       const handleUpdatedMessage = (payload: any) => {
         const msgData = payload.data || payload;
         if (!msgData) return;
-        if (msgData.conversation_id === conversationId || msgData.conversation_id === conversation.id) {
+        const activeChatId = conversationRef.current.id;
+        if (msgData.conversation_id === conversationId || msgData.conversation_id === activeChatId) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === msgData.id ? { ...m, content: msgData.content } : m
@@ -356,7 +342,8 @@ export default function IndividualChatPage({
       const handleDeletedMessage = (payload: any) => {
         const msgData = payload.data || payload;
         if (!msgData) return;
-        if (msgData.conversation_id === conversationId || msgData.conversation_id === conversation.id) {
+        const activeChatId = conversationRef.current.id;
+        if (msgData.conversation_id === conversationId || msgData.conversation_id === activeChatId) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === msgData.id
@@ -370,8 +357,9 @@ export default function IndividualChatPage({
       const handleTypingStart = (payload: any) => {
         const data = payload.data || payload;
         if (!data) return;
+        const activeChatId = conversationRef.current.id;
         if (
-          (data.conversation_id === conversationId || data.conversation_id === conversation.id) &&
+          (data.conversation_id === conversationId || data.conversation_id === activeChatId) &&
           data.user_id !== currentUserId
         ) {
           setIsTyping(true);
@@ -381,7 +369,8 @@ export default function IndividualChatPage({
       const handleTypingStop = (payload: any) => {
         const data = payload.data || payload;
         if (!data) return;
-        if (data.conversation_id === conversationId || data.conversation_id === conversation.id) {
+        const activeChatId = conversationRef.current.id;
+        if (data.conversation_id === conversationId || data.conversation_id === activeChatId) {
           setIsTyping(false);
         }
       };
@@ -392,10 +381,46 @@ export default function IndividualChatPage({
       wsClient.on("typing.start", handleTypingStart);
       wsClient.on("typing.stop", handleTypingStop);
 
-      // Background polling fallback every 3 seconds to guarantee new messages arrive even if socket drops
-      const pollTimer = setInterval(() => {
-        fetchThreadData(true);
-      }, 3000);
+      // Gentle polling fallback every 15 seconds to keep messages in sync if sockets drop
+      const pollTimer = setInterval(async () => {
+        const t = getStoredToken();
+        if (!t) return;
+        const currentTargetId = conversationRef.current.id || conversationId;
+        if (currentTargetId && !currentTargetId.startsWith("c_")) {
+          try {
+            const res = await getMessages(currentTargetId, 50, undefined, t);
+            if (res.items && res.items.length > 0) {
+              const mapped: Message[] = res.items.map((item) => ({
+                id: item.id,
+                conversationId: item.conversation_id,
+                senderId: item.sender_id,
+                content: item.content,
+                type: (item.type as "text" | "file") || "text",
+                attachment: item.attachment
+                  ? {
+                      name: item.attachment.name,
+                      size: item.attachment.size,
+                      type: "file",
+                    }
+                  : undefined,
+                createdAt: item.created_at
+                  ? new Date(item.created_at).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "Now",
+                status: item.status || "sent",
+              }));
+              setMessages((prev) => {
+                const existingIds = new Set(prev.map((m) => m.id));
+                const newItems = mapped.filter((m) => !existingIds.has(m.id));
+                if (newItems.length === 0) return prev;
+                return [...prev, ...newItems];
+              });
+            }
+          } catch {}
+        }
+      }, 15000);
 
       return () => {
         wsClient.off("message.new", handleNewMessage);
@@ -406,7 +431,7 @@ export default function IndividualChatPage({
         clearInterval(pollTimer);
       };
     }
-  }, [fetchThreadData, conversationId, conversation.id, currentUserId]);
+  }, [fetchThreadData, conversationId, currentUserId]);
 
   const handleSendMessage = async (content: string) => {
     const token = getStoredToken();

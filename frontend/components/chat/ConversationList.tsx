@@ -29,7 +29,36 @@ export function ConversationList({ activeId, className }: ConversationListProps)
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [contacts, setContacts] = useState<ContactItem[]>([]);
   const [activeSection, setActiveSection] = useState<"primary" | "general">("primary");
-  const [currentUserId, setCurrentUserId] = useState<string>("");
+  const activeIdRef = React.useRef(activeId);
+  React.useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
+
+  const [currentUserId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const userStr = localStorage.getItem("fluxchat_user");
+      if (userStr) {
+        try {
+          const u = JSON.parse(userStr);
+          if (u.id) return u.id;
+        } catch {}
+      }
+      const token =
+        localStorage.getItem("fluxchat_access_token") ||
+        localStorage.getItem("accessToken");
+      if (token) {
+        try {
+          const parts = token.split(".");
+          if (parts.length === 3) {
+            const payload = JSON.parse(atob(parts[1]));
+            if (payload.sub) return payload.sub;
+          }
+        } catch {}
+      }
+    }
+    return "";
+  });
+
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
@@ -47,6 +76,8 @@ export function ConversationList({ activeId, className }: ConversationListProps)
     );
   };
 
+  const contactsRef = React.useRef<ContactItem[]>([]);
+
   const fetchConversations = useCallback(async (silent = false) => {
     const token = getAuthToken();
     if (!token) return;
@@ -54,38 +85,42 @@ export function ConversationList({ activeId, className }: ConversationListProps)
     try {
       if (!silent) setIsLoading(true);
 
-      // Extract current user ID from token
       let myUserId = currentUserId;
-      try {
-        const parts = token.split(".");
-        if (parts.length === 3) {
-          const payload = JSON.parse(atob(parts[1]));
-          if (payload.sub) {
-            myUserId = payload.sub;
-            setCurrentUserId(payload.sub);
+      if (!myUserId) {
+        try {
+          const parts = token.split(".");
+          if (parts.length === 3) {
+            const payload = JSON.parse(atob(parts[1]));
+            if (payload.sub) myUserId = payload.sub;
+          }
+        } catch {}
+      }
+
+      // Fetch contacts only on initial load or non-silent refresh
+      let contactItems = contactsRef.current;
+      if (!silent || contactItems.length === 0) {
+        try {
+          const contactsRes = await getContacts(token);
+          if (contactsRes.items) {
+            contactItems = contactsRes.items;
+            contactsRef.current = contactItems;
+            setContacts(contactItems);
+          }
+        } catch (err: any) {
+          if (err?.message?.includes("401") || err?.message?.toLowerCase().includes("unauthorized")) {
+            router.push("/login");
+            return;
           }
         }
-      } catch {}
+      }
 
-      // Parallel fetch: conversations and confirmed contacts
-      const [res, contactsRes] = await Promise.all([
-        getConversations(50, 0, token).catch((err) => {
-          if (err?.message?.includes("401") || err?.message?.toLowerCase().includes("unauthorized")) {
-            router.push("/login");
-          }
-          return { items: null as any };
-        }),
-        getContacts(token).catch((err) => {
-          if (err?.message?.includes("401") || err?.message?.toLowerCase().includes("unauthorized")) {
-            router.push("/login");
-          }
-          return { items: [] };
-        }),
-      ]);
-
-      const contactItems = contactsRes.items || [];
-      setContacts(contactItems);
       const confirmedContactIds = new Set(contactItems.map((c) => c.contact_id));
+      const res = await getConversations(50, 0, token).catch((err) => {
+        if (err?.message?.includes("401") || err?.message?.toLowerCase().includes("unauthorized")) {
+          router.push("/login");
+        }
+        return { items: null as any };
+      });
 
       if (res.items && res.items.length > 0) {
         const mapped: Conversation[] = res.items.map((item: any) => {
@@ -130,7 +165,7 @@ export function ConversationList({ activeId, className }: ConversationListProps)
         // If Primary section is empty but General has conversations, auto-switch to General
         const hasPrimary = mapped.some((c: Conversation) => (c.section || "primary") === "primary");
         const hasGeneral = mapped.some((c: Conversation) => c.section === "general");
-        if (!hasPrimary && hasGeneral && !activeId) {
+        if (!hasPrimary && hasGeneral && !activeIdRef.current) {
           setActiveSection("general");
         }
       } else if (res.items !== null) {
@@ -141,7 +176,7 @@ export function ConversationList({ activeId, className }: ConversationListProps)
     } finally {
       setIsLoading(false);
     }
-  }, [currentUserId, activeId, router]);
+  }, [currentUserId, router]);
 
   const fetchContactsList = useCallback(async () => {
     const token = getAuthToken();
@@ -149,7 +184,10 @@ export function ConversationList({ activeId, className }: ConversationListProps)
 
     try {
       const res = await getContacts(token);
-      setContacts(res.items || []);
+      if (res.items) {
+        contactsRef.current = res.items;
+        setContacts(res.items);
+      }
     } catch (err: any) {
       console.warn("Could not fetch contacts for chat picker:", err.message);
     }
@@ -157,7 +195,6 @@ export function ConversationList({ activeId, className }: ConversationListProps)
 
   useEffect(() => {
     fetchConversations();
-    fetchContactsList();
 
     const handleWsMessage = (payload: any) => {
       const msgData = payload.data || payload;
@@ -177,7 +214,7 @@ export function ConversationList({ activeId, className }: ConversationListProps)
           const conv = { ...updated[existingIdx] };
           conv.lastMessage = msgData.content;
           conv.lastMessageTime = timeFormatted;
-          if (activeId !== conv.id && msgData.sender_id !== currentUserId) {
+          if (activeIdRef.current !== conv.id && msgData.sender_id !== currentUserId) {
             conv.unreadCount = (conv.unreadCount || 0) + 1;
           }
           updated.splice(existingIdx, 1);
@@ -191,16 +228,16 @@ export function ConversationList({ activeId, className }: ConversationListProps)
 
     wsClient.on("message.new", handleWsMessage);
 
-    // Silent periodic refresh every 4 seconds to keep conversations completely in sync
+    // Silent periodic refresh every 25 seconds to keep conversations completely in sync
     const pollInterval = setInterval(() => {
       fetchConversations(true);
-    }, 4000);
+    }, 25000);
 
     return () => {
       wsClient.off("message.new", handleWsMessage);
       clearInterval(pollInterval);
     };
-  }, [fetchConversations, fetchContactsList, activeId, currentUserId]);
+  }, [fetchConversations, fetchContactsList, currentUserId]);
 
   // Auto-switch to General section if active conversation is in General
   useEffect(() => {

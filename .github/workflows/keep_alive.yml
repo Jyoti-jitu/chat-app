@@ -1,0 +1,23 @@
+name: Render Backend Keep-Alive Cron
+
+on:
+  schedule:
+    # Runs every 10 minutes to prevent Render free-tier instance from sleeping
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping-backend:
+    name: Ping Render Health Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Backend Health Endpoint
+        run: |
+          echo "Pinging FluxChat Render Backend at $(date)..."
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 https://fluxchat-backend-v76u.onrender.com/health)
+          echo "HTTP Response Status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "Backend is healthy and awake!"
+          else
+            echo "Warning: Received HTTP status $HTTP_STATUS from backend"
+          fi
