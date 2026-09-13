@@ -22,6 +22,7 @@ import {
   rejectContactRequest,
   cancelContactRequest,
 } from "@/lib/api/contact";
+import { wsClient } from "@/lib/api/websocket";
 
 export default function RequestsPage() {
   const [requests, setRequests] = useState<ConnectionRequest[]>([]);
@@ -102,6 +103,21 @@ export default function RequestsPage() {
 
   useEffect(() => {
     fetchRequests();
+
+    const handleNewNotification = (payload: any) => {
+      const data = payload?.data || payload;
+      if (data?.type === "request" || data?.category === "requests") {
+        fetchRequests();
+      }
+    };
+
+    wsClient.on("notification.new", handleNewNotification);
+    window.addEventListener("fluxchat:requests_updated", fetchRequests);
+
+    return () => {
+      wsClient.off("notification.new", handleNewNotification);
+      window.removeEventListener("fluxchat:requests_updated", fetchRequests);
+    };
   }, [fetchRequests]);
 
   const receivedRequests = requests.filter((r) => r.type === "received");
@@ -122,6 +138,9 @@ export default function RequestsPage() {
         await acceptContactRequest(id, token);
         setRequests((prev) => prev.filter((r) => r.id !== id));
         showToast(`Connected with ${userName}!`, "success");
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("fluxchat:requests_updated"));
+        }
       } catch (err: any) {
         showToast(err.message || "Failed to accept connection request", "error");
       } finally {
@@ -130,6 +149,9 @@ export default function RequestsPage() {
     } else {
       setRequests((prev) => prev.filter((r) => r.id !== id));
       showToast(`Connected with ${userName}!`, "success");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("fluxchat:requests_updated"));
+      }
     }
   };
 
@@ -143,6 +165,9 @@ export default function RequestsPage() {
         await rejectContactRequest(id, token);
         setRequests((prev) => prev.filter((r) => r.id !== id));
         showToast("Request declined.");
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("fluxchat:requests_updated"));
+        }
       } catch (err: any) {
         showToast(err.message || "Failed to decline request", "error");
       } finally {
@@ -151,6 +176,9 @@ export default function RequestsPage() {
     } else {
       setRequests((prev) => prev.filter((r) => r.id !== id));
       showToast("Request declined.");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("fluxchat:requests_updated"));
+      }
     }
   };
 
@@ -164,6 +192,9 @@ export default function RequestsPage() {
         await cancelContactRequest(id, token);
         setRequests((prev) => prev.filter((r) => r.id !== id));
         showToast("Request cancelled.");
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("fluxchat:requests_updated"));
+        }
       } catch (err: any) {
         showToast(err.message || "Failed to cancel request", "error");
       } finally {
@@ -172,6 +203,9 @@ export default function RequestsPage() {
     } else {
       setRequests((prev) => prev.filter((r) => r.id !== id));
       showToast("Request cancelled.");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("fluxchat:requests_updated"));
+      }
     }
   };
 

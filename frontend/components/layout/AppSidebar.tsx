@@ -1,9 +1,15 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { logout } from "@/lib/api/auth";
+import {
+  logout,
+  getStoredToken,
+  getContactRequests,
+  getNotifications,
+  wsClient,
+} from "@/lib/api";
 import {
   MessageSquare,
   Users,
@@ -21,6 +27,8 @@ export function AppSidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const [profile, setProfile] = useState<{ name: string; username: string; avatar?: string } | null>(null);
+  const [requestsCount, setRequestsCount] = useState<number>(0);
+  const [notificationsCount, setNotificationsCount] = useState<number>(0);
 
   const handleSignOut = async () => {
     try {
@@ -30,6 +38,28 @@ export function AppSidebar() {
     }
     router.push("/login");
   };
+
+  const fetchBadgeCounts = useCallback(async () => {
+    const token = getStoredToken();
+    if (!token) return;
+
+    try {
+      const [reqRes, notifRes] = await Promise.allSettled([
+        getContactRequests(token),
+        getNotifications("all", 1, 0, token),
+      ]);
+
+      if (reqRes.status === "fulfilled" && reqRes.value?.received) {
+        const pending = reqRes.value.received.filter((r) => r.status === "pending").length;
+        setRequestsCount(pending);
+      }
+      if (notifRes.status === "fulfilled" && typeof notifRes.value?.unread_count === "number") {
+        setNotificationsCount(notifRes.value.unread_count);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   useEffect(() => {
     const updateLocalProfile = () => {
@@ -54,12 +84,43 @@ export function AppSidebar() {
     };
   }, []);
 
+  useEffect(() => {
+    fetchBadgeCounts();
+
+    const handleNewNotification = (payload: any) => {
+      const data = payload?.data || payload;
+      if (data?.type === "request" || data?.category === "requests") {
+        setRequestsCount((prev) => prev + 1);
+      }
+      setNotificationsCount((prev) => prev + 1);
+      fetchBadgeCounts();
+    };
+
+    wsClient.on("notification.new", handleNewNotification);
+    window.addEventListener("fluxchat:notification_received", fetchBadgeCounts);
+    window.addEventListener("fluxchat:requests_updated", fetchBadgeCounts);
+
+    return () => {
+      wsClient.off("notification.new", handleNewNotification);
+      window.removeEventListener("fluxchat:notification_received", fetchBadgeCounts);
+      window.removeEventListener("fluxchat:requests_updated", fetchBadgeCounts);
+    };
+  }, [fetchBadgeCounts]);
+
+  useEffect(() => {
+    if (pathname === "/app/requests") {
+      setRequestsCount(0);
+    }
+    if (pathname === "/app/notifications") {
+      setNotificationsCount(0);
+    }
+  }, [pathname]);
+
   const navItems = [
     {
       label: "Chats",
       href: "/app/chats",
       icon: <MessageSquare className="w-5 h-5" />,
-      badge: 3,
     },
     {
       label: "Status",
@@ -71,7 +132,6 @@ export function AppSidebar() {
       label: "Groups",
       href: "/app/groups",
       icon: <UsersRound className="w-5 h-5" />,
-      badge: 4,
     },
     {
       label: "Contacts",
@@ -82,13 +142,13 @@ export function AppSidebar() {
       label: "Requests",
       href: "/app/requests",
       icon: <UserPlus className="w-5 h-5" />,
-      badge: 2,
+      badge: requestsCount > 0 ? requestsCount : undefined,
     },
     {
       label: "Notifications",
       href: "/app/notifications",
       icon: <Bell className="w-5 h-5" />,
-      badge: 3,
+      badge: notificationsCount > 0 ? notificationsCount : undefined,
     },
     {
       label: "Settings",

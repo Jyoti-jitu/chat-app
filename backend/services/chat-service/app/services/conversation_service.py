@@ -313,6 +313,30 @@ class ConversationService:
                 admins,
                 current_user_id,
             )
+
+            # Also persist notification to each admin in notification-service
+            try:
+                from shared.clients.service_client import get_notification_client
+                notif_client = get_notification_client()
+                user_display_name = prof.get("name", "A user")
+                group_name = conv.get("name", "the group")
+                for admin_id in admins:
+                    await notif_client.post(
+                        "/api/v1/notifications",
+                        json_data={
+                            "user_id": str(admin_id),
+                            "actor_id": current_user_id,
+                            "type": "request",
+                            "category": "requests",
+                            "title": "Group Join Request",
+                            "description": f"{user_display_name} requested to join '{group_name}'.",
+                            "reference_id": str(conversation_id),
+                            "link": f"/app/chats/{conversation_id}",
+                        },
+                    )
+            except Exception as notif_err:
+                logger.warning(f"Failed to dispatch group join request notification: {notif_err}")
+
             return {
                 "status": "pending_approval",
                 "message": "Join request submitted. Awaiting group admin approval.",
@@ -356,6 +380,27 @@ class ConversationService:
             members,
             current_user_id,
         )
+
+        # Notify approved user
+        try:
+            from shared.clients.service_client import get_notification_client
+            notif_client = get_notification_client()
+            group_name = (updated or conv).get("name", "the group")
+            await notif_client.post(
+                "/api/v1/notifications",
+                json_data={
+                    "user_id": str(target_user_id),
+                    "actor_id": current_user_id,
+                    "type": "request",
+                    "category": "requests",
+                    "title": "Group Join Approved",
+                    "description": f"Your request to join '{group_name}' has been approved.",
+                    "reference_id": str(conversation_id),
+                    "link": f"/app/chats/{conversation_id}",
+                },
+            )
+        except Exception as notif_err:
+            logger.warning(f"Failed to dispatch group join approval notification: {notif_err}")
 
         return await self._hydrate_conversation(updated or conv, current_user_id)
 

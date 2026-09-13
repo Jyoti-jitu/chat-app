@@ -96,6 +96,33 @@ class ContactService:
         req_doc = await self.contact_repo.create_request(sender_id, recipient_id)
         sender = await self.user_repo.get_by_id(sender_id)
 
+        # Dispatch real-time and persistent notification to recipient
+        try:
+            from shared.clients.service_client import get_notification_client
+            notif_client = get_notification_client()
+            sender_name = sender.get("name", "A user") if sender else "A user"
+            sender_username = sender.get("username", "") if sender else ""
+            desc = (
+                f"{sender_name} (@{sender_username}) sent you a connection request."
+                if sender_username
+                else f"{sender_name} sent you a connection request."
+            )
+            await notif_client.post(
+                "/api/v1/notifications",
+                json_data={
+                    "user_id": recipient_id,
+                    "actor_id": sender_id,
+                    "type": "request",
+                    "category": "requests",
+                    "title": "New Connection Request",
+                    "description": desc,
+                    "reference_id": req_doc["id"],
+                    "link": "/app/requests",
+                },
+            )
+        except Exception as notif_err:
+            logger.warning(f"Failed to dispatch contact request notification: {notif_err}")
+
         logger.info(f"Connection request sent from {sender_id} to {recipient_id}")
         return ContactRequestResponse(
             id=req_doc["id"],
@@ -162,6 +189,28 @@ class ContactService:
 
         # 2. Insert bidirectional contact records
         await self.contact_repo.add_contact_pair(req["sender_id"], req["recipient_id"])
+
+        # 3. Dispatch persistent notification to original requester
+        try:
+            from shared.clients.service_client import get_notification_client
+            notif_client = get_notification_client()
+            recipient = await self.user_repo.get_by_id(current_user_id)
+            recipient_name = recipient.get("name", "A user") if recipient else "A user"
+            await notif_client.post(
+                "/api/v1/notifications",
+                json_data={
+                    "user_id": req["sender_id"],
+                    "actor_id": current_user_id,
+                    "type": "request",
+                    "category": "requests",
+                    "title": "Connection Request Accepted",
+                    "description": f"{recipient_name} accepted your connection request.",
+                    "reference_id": request_id,
+                    "link": "/app/contacts",
+                },
+            )
+        except Exception as notif_err:
+            logger.warning(f"Failed to dispatch contact accepted notification: {notif_err}")
 
         logger.info(
             f"Accepted request {request_id}. Added contact link between {req['sender_id']} and {req['recipient_id']}"

@@ -283,6 +283,9 @@ export default function ContactsPage() {
       await sendContactRequest({ recipient_id: targetUser.id }, token);
       setPendingSentRecipientIds((prev) => new Set(prev).add(targetUser.id));
       showToast(`Connection request sent to ${targetUser.name}!`, "success");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("fluxchat:requests_updated"));
+      }
     } catch (err: any) {
       showToast(err.message || "Failed to send request", "error");
     } finally {
@@ -309,6 +312,9 @@ export default function ContactsPage() {
       setContacts((prev) => [targetUser, ...prev]);
 
       showToast(`Connected with ${targetUser.name}!`, "success");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("fluxchat:requests_updated"));
+      }
     } catch (err: any) {
       showToast(err.message || "Failed to accept request", "error");
     } finally {
@@ -331,6 +337,9 @@ export default function ContactsPage() {
         setIsAddModalOpen(false);
         setNewContactIdentifier("");
         setNewContactName("");
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("fluxchat:requests_updated"));
+        }
         loadAllData();
       } catch (err: any) {
         showToast(err.message || "Failed to send connection request", "error");
