@@ -2,58 +2,70 @@
 
 FluxChat is a full-featured, responsive, and beautifully designed modern messaging and collaboration platform built with Next.js 16 (App Router), TypeScript, Tailwind CSS, and 7 distributed FastAPI microservices backed by MongoDB Atlas.
 
-> 📖 **Quick Links:**
-> - [RUNNING.md](RUNNING.md) — Step-by-step startup guide, local execution, and troubleshooting.
-> - [DEPLOYMENT.md](DEPLOYMENT.md) — 10-minute production deployment guide for Vercel (Frontend) & Render (Backend).
-> - [FEATURES_AND_SYSTEM_DOCUMENTATION.md](FEATURES_AND_SYSTEM_DOCUMENTATION.md) — Enterprise features, Cloudinary media, 24h stories, data purge, group management, and complete API catalog.
-> - [PROJECT_FILES_AND_ARCHITECTURE_SUMMARY.md](PROJECT_FILES_AND_ARCHITECTURE_SUMMARY.md) — Exhaustive master inventory of all files, models, and architectural components.
+> 📖 **Core Documentation for Presentation & Evaluation:**
+> - [PROJECT_IDEA_AND_HLD.md](PROJECT_IDEA_AND_HLD.md) — **Project Idea & High-Level Design (HLD)**: Problem statement, microservices decomposition, system architecture diagrams, and tradeoffs.
+> - [PROJECT_LLD.md](PROJECT_LLD.md) — **Low-Level Design (LLD)**: Three-tier layering, MongoDB BSON schemas, API endpoint catalog, WebSocket protocols, and caching policies.
+> - [RUNNING.md](RUNNING.md) — Step-by-step startup guide, local execution, and health probes.
+> - [DEPLOYMENT.md](DEPLOYMENT.md) — Production deployment guide for Vercel (Frontend) & Render (Backend).
 
 ---
 
 ## 🚀 Key Features
 
 - 💬 **Real-Time Direct & Group Messaging**:
-  - Full-featured chat interface with timestamps, status receipts (sent, delivered, read), and attachment sharing.
-  - Multi-tab conversation switcher with real-time search.
-  - Safe message deletion (for self/everyone), clear chat history, and delete conversation options.
+  - Sub-50ms message exchange via Redis Pub/Sub and WebSocket streaming.
+  - Multi-tab conversation switcher with instant search, message timestamps, and delivery status indicators.
+  - Safe message deletion (for self/everyone), clear chat history, and conversation purge.
+  - Real-time active typing indicators and automatic text area focus.
 
-- 👥 **Groups & Communities**:
+- 👥 **Group & Squad Management**:
   - Discover, join, and manage private & public team squads and community channels.
-  - Interactive group info modal, active member rosters, mute notifications, and admin group deletion.
-  - Rich group creation flow with custom emoji avatars and member picker.
+  - Founding admin privileges, join approval workflows, active member rosters, and member role promotion/demotion.
+  - Rich group creation flow with custom emoji avatars and member invite selector.
 
-- ⭕ **24-Hour Status & Stories**:
-  - Share disappearing text and gradient stories with rich typography (Modern, Serif, Mono, Bold).
+- ⭕ **24-Hour Ephemeral Status Stories**:
+  - Share disappearing text and media stories with custom typography (Modern, Serif, Mono, Bold) and gradient backdrops.
   - Fullscreen Instagram/WhatsApp-style story viewer with multi-segment timer, quick emoji reactions, and reply input.
   - Slide-level and whole-story deletion controls.
 
-- 📇 **Contacts Management**:
-  - Categorized online and offline contacts with search and quick actions (Direct Message, Voice Call, Video Call).
-  - Add new contact modal and delete contact action with safe confirmation modals.
+- 📇 **Contacts & Friend Requests**:
+  - Search registered users by phone number or username.
+  - Send, accept, reject, or cancel contact requests with real-time UI updates and live toast notifications.
+  - Direct message, voice, and video call actions with quick confirmation modals.
 
-- 🔔 **Notifications Center**:
-  - Filtered notifications (All, Messages, Requests, System) with mark-as-read, individual dismiss/delete, and clear-all actions.
+- 🔔 **Real-Time Notifications Subsystem**:
+  - Real-time in-app toast banners and persistent notification inbox for contact requests, group join requests, and administrative approvals.
+  - Filtered notifications (All, Messages, Requests, System) with mark-as-read, individual dismiss, and clear-all actions.
+
+- 👤 **Customizable User Profile**:
+  - Cloudinary CDN media uploads for profile avatars and banner covers.
+  - Add unlimited custom web and social links (GitHub, LinkedIn, Twitter, Portfolio, etc.) with real-time editing.
 
 - 🎨 **Dynamic Appearance & Custom Color Engine**:
-  - Dark / Light mode toggle with zero-FOUC persistent theme engine.
+  - Zero-FOUC persistent Dark / Light mode toggle.
   - 14 curated high-contrast accent presets across Greens, Blues, Purples, Warm & Minimal tones.
-  - Native color wheel picker and custom Hex input with real-time CSS variable recalculation.
+  - Native color wheel picker and custom Hex input with dynamic CSS variable recalculation.
 
-- 🔐 **Phone Authentication & OTP**:
-  - Default India (`+91 🇮🇳`) phone number format with a 24+ country dial code selector.
-  - Mobile password login and One-Time OTP login flows.
+- 🔐 **Dual Authentication & Security**:
+  - Mobile password login and One-Time OTP login flows with country dial code selector.
   - Interactive 6-digit SMS verification with resend timer on registration.
-  - Forgot password phone recovery flow.
+  - Cryptographic JWT access/refresh tokens with in-memory Redis token revocation blacklist.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Framework**: [Next.js 16](https://nextjs.org/) (App Router, Turbopack)
-- **Language**: [TypeScript](https://www.typescriptlang.org/)
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/) + Custom CSS Variable Theme Engine
-- **Icons**: [Lucide React](https://lucide.dev/)
-- **Architecture**: Modular Frontend (`frontend/`) and Microservice-Ready Backend (`backend/`)
+- **Frontend**: [Next.js 16](https://nextjs.org/) (App Router, Turbopack), [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS](https://tailwindcss.com/), [Lucide React](https://lucide.dev/)
+- **Backend Services (7 Microservices)**: [FastAPI](https://fastapi.tiangolo.com/) (Python 3.12+), [Uvicorn](https://www.uvicorn.org/)
+  - `api-gateway` (:8000) — Reverse proxy, request aggregation, JWT validation, and CORS routing
+  - `auth-service` (:8001) — Authentication, registration, OTP lifecycle, and token revocation
+  - `user-service` (:8002) — User profiles, avatar/cover uploads, unlimited links, contacts, and friend requests
+  - `chat-service` (:8003) — Conversation management, group policies, join requests, and member roles
+  - `message-service` (:8004) — Message storage, attachments, pagination, and deletion
+  - `websocket-service` (:8005) — Real-time bidirectional WebSocket connections & Redis subscription
+  - `notification-service` (:8006) — Persistent notifications inbox and real-time alert dispatch
+- **Database & Storage**: [MongoDB Atlas](https://www.mongodb.com/atlas) (Motor Async Driver), [Cloudinary CDN](https://cloudinary.com/) (Media assets)
+- **Message Bus & In-Memory Cache**: [Redis](https://redis.io/) (Pub/Sub message bus, active chat cache, token blacklist)
 
 ---
 
@@ -61,15 +73,29 @@ FluxChat is a full-featured, responsive, and beautifully designed modern messagi
 
 ```text
 chat-app/
+├── PROJECT_IDEA_AND_HLD.md       # Master High-Level Design & System Architecture
+├── PROJECT_LLD.md                # Master Low-Level Design, Schemas & API Contracts
+├── RUNNING.md                    # Local Execution & Verification Guide
+├── DEPLOYMENT.md                 # Production Cloud Deployment Guide (Vercel + Render)
+├── docker-compose.yml            # Local multi-container Docker deployment
+├── render.yaml                   # Infrastructure-as-code for Render cloud deployment
 ├── frontend/                     # Next.js 16 Web Application
-│   ├── app/                      # App router pages & layouts
-│   │   ├── (auth)/               # Login, Register, Forgot Password
-│   │   └── app/                  # Authenticated app routes (chats, contacts, groups, status, notifications, settings)
-│   ├── components/               # Reusable UI, chat, layout components
-│   ├── hooks/                    # Custom React hooks (theme, mobile, etc.)
-│   ├── lib/                      # Mock datasets, utility helpers, themes
-│   └── types/                    # TypeScript interfaces & models
-├── backend/                      # Backend microservices roadmap & structure
+│   ├── app/                      # App router pages (auth, chats, contacts, groups, status, profile)
+│   ├── components/               # Modular UI, chat, modals, and layout components
+│   ├── hooks/                    # Custom React hooks (theme, mobile, websocket)
+│   ├── lib/                      # API clients, WebSocketManager, utilities
+│   └── types/                    # Domain TypeScript interfaces
+├── backend/                      # Distributed Microservices Architecture
+│   ├── services/
+│   │   ├── api-gateway/          # Reverse proxy (:8000)
+│   │   ├── auth-service/         # Authentication & OTP (:8001)
+│   │   ├── user-service/         # Profiles, links & contacts (:8002)
+│   │   ├── chat-service/         # Conversations & groups (:8003)
+│   │   ├── message-service/      # Messages & history (:8004)
+│   │   ├── websocket-service/    # Real-time WebSockets (:8005)
+│   │   └── notification-service/ # Notifications & alerts (:8006)
+│   ├── shared/                   # Shared auth, database, models, and health probes
+│   └── start_all_backend.sh      # Unified microservices orchestration script
 └── README.md
 ```
 
