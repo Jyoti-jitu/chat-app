@@ -56,6 +56,7 @@ FluxChat is built on an enterprise-grade, distributed microservices architecture
 | `conversations` | `ConversationModel` | Direct chats (1:1) and group channels | `_id`, `type` (`direct`, `group`), `participants`, `name`, `avatar`, `last_message`, `is_archived`, `created_at`, `updated_at` |
 | `messages` | `MessageModel` | Chat messages, receipts & attachments | `_id`, `conversation_id`, `sender_id`, `content`, `type`, `status` (`sent`, `delivered`, `read`), `read_by`, `attachments`, `reply_to_id`, `is_deleted` |
 | `notifications`| `NotificationModel` | User alert inbox | `_id`, `user_id`, `type` (`message`, `request`, `system`), `title`, `body`, `data`, `is_read`, `created_at` |
+| `status_stories`| `StatusStoryModel` | 24-hour self-destructing photo & text stories | `_id`, `user_id`, `slides`, `expires_at`, `created_at` |
 | `revoked_tokens`| `RevocationModel` | Blacklisted JWT refresh and access tokens | `_id`, `token`, `expires_at`, `revoked_at` |
 
 ---
@@ -68,6 +69,7 @@ FluxChat is built on an enterprise-grade, distributed microservices architecture
 
 | File Path | Why It Was Created & What It Does |
 |---|---|
+| `FEATURES_AND_SYSTEM_DOCUMENTATION.md` | Master technical feature manual detailing Cloudinary media control, 24h status stories, group admin policies, Redis caching, and deployment parameters. |
 | `RUNNING.md` | Master operational guide providing single-command startup (`./backend/start_all_backend.sh start`), prerequisites, port matrices, troubleshooting, and testing instructions. |
 | `README.md` | Primary project repository overview detailing features, tech stack, screenshots, and getting started shortcuts. |
 | `PROJECT_FILES_AND_ARCHITECTURE_SUMMARY.md` | *(This file)* Complete architectural blueprint and file-by-file catalog of the entire repository. |
