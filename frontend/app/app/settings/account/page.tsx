@@ -108,6 +108,7 @@ export default function AccountSettingsPage() {
 
       if (typeof window !== "undefined") {
         localStorage.setItem("fluxchat_user", JSON.stringify(updated));
+        window.dispatchEvent(new Event("fluxchat:profile_updated"));
       }
 
       setProfileSuccess(true);
@@ -197,6 +198,7 @@ export default function AccountSettingsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Avatar
+              src={profile?.avatar || undefined}
               name={name || "User"}
               size="lg"
               isOnline={profile?.is_online ?? true}

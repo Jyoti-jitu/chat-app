@@ -65,9 +65,9 @@ class UserRepository:
         updates["updated_at"] = datetime.now(timezone.utc)
 
         try:
-            filter_query = {"_id": ObjectId(user_id)}
+            filter_query = {"$or": [{"_id": ObjectId(user_id)}, {"_id": str(user_id)}]}
         except Exception:
-            filter_query = {"id": str(user_id)}
+            filter_query = {"_id": str(user_id)}
 
         result = await self.collection.find_one_and_update(
             filter_query,

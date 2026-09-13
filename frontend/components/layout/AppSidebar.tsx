@@ -32,17 +32,26 @@ export function AppSidebar() {
   };
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("fluxchat_user");
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (parsed && parsed.name) {
-            setProfile(parsed);
-          }
-        } catch {}
+    const updateLocalProfile = () => {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("fluxchat_user");
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            if (parsed && parsed.name) {
+              setProfile(parsed);
+            }
+          } catch {}
+        }
       }
-    }
+    };
+    updateLocalProfile();
+    window.addEventListener("fluxchat:profile_updated", updateLocalProfile);
+    window.addEventListener("storage", updateLocalProfile);
+    return () => {
+      window.removeEventListener("fluxchat:profile_updated", updateLocalProfile);
+      window.removeEventListener("storage", updateLocalProfile);
+    };
   }, []);
 
   const navItems = [
@@ -162,6 +171,7 @@ export function AppSidebar() {
             className="flex items-center gap-3 min-w-0 flex-1"
           >
             <Avatar
+              src={profile?.avatar}
               name={profile?.name || "My Account"}
               size="md"
               isOnline={true}

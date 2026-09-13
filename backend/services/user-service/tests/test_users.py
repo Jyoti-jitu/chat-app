@@ -134,6 +134,9 @@ async def test_user_profile_lifecycle_and_search():
                 "name": f"Alice Updated {suffix}",
                 "bio": "Updated bio via User Service API!",
                 "avatar": "https://example.com/new-avatar.png",
+                "cover_image": "https://example.com/new-cover.jpg",
+                "website": "github.com/alice",
+                "phone": f"+1555{suffix % 10000:04d}",
             }
             patch_resp = await ac.patch("/api/v1/users/me", json=patch_payload, headers=headers)
             assert patch_resp.status_code == 200
@@ -141,6 +144,9 @@ async def test_user_profile_lifecycle_and_search():
             assert updated_data["name"] == patch_payload["name"]
             assert updated_data["bio"] == patch_payload["bio"]
             assert updated_data["avatar"] == patch_payload["avatar"]
+            assert updated_data["cover_image"] == patch_payload["cover_image"]
+            assert updated_data["website"] == "https://github.com/alice"
+            assert updated_data["phone"] == patch_payload["phone"]
 
             # 5a. GET /api/v1/users/search?q=... (by username)
             search_resp = await ac.get(f"/api/v1/users/search?q=Bob_{suffix}", headers=headers)

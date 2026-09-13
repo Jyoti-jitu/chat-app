@@ -47,6 +47,11 @@ class UserService:
             update_dict["name"] = update_dict["name"].strip()
         if "bio" in update_dict and update_dict["bio"] is not None:
             update_dict["bio"] = update_dict["bio"].strip()
+        if "website" in update_dict and update_dict["website"]:
+            clean_website = update_dict["website"].strip()
+            if clean_website and not clean_website.startswith(("http://", "https://")):
+                clean_website = f"https://{clean_website}"
+            update_dict["website"] = clean_website
 
         # Check username uniqueness if changed
         if "username" in update_dict and update_dict["username"]:

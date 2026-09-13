@@ -11,6 +11,8 @@ export interface User {
   email: string;
   phone?: string;
   avatar?: string;
+  coverImage?: string;
+  website?: string;
   isOnline: boolean;
   lastSeen?: string;
   bio?: string;

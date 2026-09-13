@@ -19,8 +19,10 @@ class UserProfileUpdate(BaseModel):
     )
     email: Optional[EmailStr] = Field(None, description="Updated valid email address")
     bio: Optional[str] = Field(None, max_length=250, description="Short personal bio or status message")
-    avatar: Optional[str] = Field(None, max_length=1000, description="Avatar image URL or base64 data URI")
-    phone: Optional[str] = Field(None, description="Updated phone number")
+    avatar: Optional[str] = Field(None, description="Avatar image URL or base64 data URI")
+    cover_image: Optional[str] = Field(None, description="Cover / background image URL or base64 data URI")
+    phone: Optional[str] = Field(None, max_length=50, description="Updated phone number")
+    website: Optional[str] = Field(None, max_length=500, description="Personal link or website URL")
 
 
 class UserProfileResponse(BaseModel):
@@ -31,6 +33,8 @@ class UserProfileResponse(BaseModel):
     email: EmailStr
     phone: Optional[str] = None
     avatar: Optional[str] = None
+    cover_image: Optional[str] = None
+    website: Optional[str] = None
     bio: Optional[str] = None
     is_active: bool = True
     is_online: bool = False
@@ -45,6 +49,8 @@ class UserPublicProfileResponse(BaseModel):
     name: str
     username: str
     avatar: Optional[str] = None
+    cover_image: Optional[str] = None
+    website: Optional[str] = None
     bio: Optional[str] = None
     phone: Optional[str] = None
     is_online: bool = False

@@ -16,6 +16,8 @@ export interface UserProfile {
   email: string;
   phone?: string | null;
   avatar?: string | null;
+  cover_image?: string | null;
+  website?: string | null;
   bio?: string | null;
   is_active: boolean;
   is_online: boolean;
@@ -29,6 +31,8 @@ export interface UserPublicProfile {
   name: string;
   username: string;
   avatar?: string | null;
+  cover_image?: string | null;
+  website?: string | null;
   bio?: string | null;
   phone?: string | null;
   is_online: boolean;
@@ -47,6 +51,8 @@ export interface UpdateProfilePayload {
   email?: string;
   bio?: string;
   avatar?: string;
+  cover_image?: string;
+  website?: string;
   phone?: string;
 }
 
