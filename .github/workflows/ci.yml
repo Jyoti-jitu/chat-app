@@ -73,3 +73,24 @@ jobs:
         run: |
           cd services/api-gateway
           PYTHONPATH=.:../.. pytest tests/ -v
+
+  # ============================================================================
+  # Auto-Deploy Trigger to Render (If Deploy Hook Secret is configured)
+  # ============================================================================
+  auto-deploy:
+    name: Trigger Render Auto-Deploy
+    needs: [frontend, backend]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render Deploy Hook
+        env:
+          HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -n "$HOOK_URL" ]; then
+            echo "Triggering Render deployment via deploy hook..."
+            curl -s -X POST "$HOOK_URL"
+            echo "Deploy hook triggered successfully!"
+          else
+            echo "No RENDER_DEPLOY_HOOK_URL secret found. Relying on Render Git Auto-Deploy."
+          fi

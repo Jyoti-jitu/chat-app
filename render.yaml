@@ -11,6 +11,7 @@ services:
     dockerContext: backend
     plan: free
     region: oregon
+    autoDeploy: true
     healthCheckPath: /health
     envVars:
       - key: MONGODB_URL
