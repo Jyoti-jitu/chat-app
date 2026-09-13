@@ -31,14 +31,25 @@ export interface ConversationItem {
   type: "direct" | "group";
   name?: string | null;
   avatar?: string | null;
+  description?: string | null;
+  join_mode?: "open" | "approval";
   member_ids: string[];
   members: ConversationMember[];
   admins: string[];
   created_by?: string | null;
+  join_requests?: GroupJoinRequestItem[];
   last_message?: LastMessagePreview | null;
   unread_count: number;
   created_at?: string | null;
   updated_at?: string | null;
+}
+
+export interface GroupJoinRequestItem {
+  user_id: string;
+  name: string;
+  username: string;
+  avatar?: string | null;
+  requested_at?: string | null;
 }
 
 export interface ConversationListResponse {
@@ -52,13 +63,17 @@ export interface CreateDirectConversationPayload {
 
 export interface CreateGroupConversationPayload {
   name: string;
-  member_ids: string[];
+  member_ids?: string[];
   avatar?: string;
+  description?: string;
+  join_mode?: "open" | "approval";
 }
 
 export interface UpdateGroupConversationPayload {
   name?: string;
   avatar?: string;
+  description?: string;
+  join_mode?: "open" | "approval";
 }
 
 import { ActionSuccessResponse } from "./contact";
@@ -258,6 +273,8 @@ export async function removeConversationMember(
   return res.json();
 }
 
+export const removeMemberFromGroup = removeConversationMember;
+
 /**
  * Voluntarily leaves a conversation.
  */
@@ -328,6 +345,156 @@ export async function clearConversationMessages(
     throw new Error(
       errorData.detail || `Failed to clear messages (HTTP ${res.status})`
     );
+  }
+
+  return res.json();
+}
+
+/**
+ * Joins an open group or submits a join request if approval is required.
+ */
+export async function joinGroup(
+  conversationId: string,
+  token?: string
+): Promise<{ status: string; message: string; conversation?: ConversationItem }> {
+  const res = await fetch(`${CHAT_SERVICE_URL}/conversations/${conversationId}/join`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(token),
+    },
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to join group (HTTP ${res.status})`);
+  }
+
+  return res.json();
+}
+
+/**
+ * Retrieves pending join requests for an approval-based group (Admin only).
+ */
+export async function getGroupJoinRequests(
+  conversationId: string,
+  token?: string
+): Promise<GroupJoinRequestItem[]> {
+  const res = await fetch(`${CHAT_SERVICE_URL}/conversations/${conversationId}/join-requests`, {
+    headers: {
+      ...getAuthHeader(token),
+    },
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to fetch join requests (HTTP ${res.status})`);
+  }
+
+  return res.json();
+}
+
+/**
+ * Approves a user's join request to a group (Admin only).
+ */
+export async function approveGroupJoinRequest(
+  conversationId: string,
+  targetUserId: string,
+  token?: string
+): Promise<ConversationItem> {
+  const res = await fetch(
+    `${CHAT_SERVICE_URL}/conversations/${conversationId}/join-requests/${targetUserId}/approve`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeader(token),
+      },
+    }
+  );
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to approve join request (HTTP ${res.status})`);
+  }
+
+  return res.json();
+}
+
+/**
+ * Rejects a user's join request to a group (Admin only).
+ */
+export async function rejectGroupJoinRequest(
+  conversationId: string,
+  targetUserId: string,
+  token?: string
+): Promise<ActionSuccessResponse> {
+  const res = await fetch(
+    `${CHAT_SERVICE_URL}/conversations/${conversationId}/join-requests/${targetUserId}/reject`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeader(token),
+      },
+    }
+  );
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to reject join request (HTTP ${res.status})`);
+  }
+
+  return res.json();
+}
+
+/**
+ * Updates group settings (join mode, avatar, description, name). Admin only.
+ */
+export async function updateGroupSettings(
+  conversationId: string,
+  payload: UpdateGroupConversationPayload,
+  token?: string
+): Promise<ConversationItem> {
+  const res = await fetch(`${CHAT_SERVICE_URL}/conversations/${conversationId}/settings`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(token),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to update group settings (HTTP ${res.status})`);
+  }
+
+  return res.json();
+}
+
+/**
+ * Promotes an existing member to conversation admin (Admin only).
+ */
+export async function promoteMemberToAdmin(
+  conversationId: string,
+  targetUserId: string,
+  token?: string
+): Promise<ConversationItem> {
+  const res = await fetch(
+    `${CHAT_SERVICE_URL}/conversations/${conversationId}/members/${targetUserId}/admin`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeader(token),
+      },
+    }
+  );
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to promote member (HTTP ${res.status})`);
   }
 
   return res.json();

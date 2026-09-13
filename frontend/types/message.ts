@@ -22,6 +22,7 @@ export interface Message {
   status: "sent" | "delivered" | "read";
   attachment?: MessageAttachment;
   edited?: boolean;
+  deleted?: boolean;
   reactions?: MessageReaction[];
   replyTo?: string;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { CheckCheck, Check, MoreVertical, Copy, Trash2, Reply, Smile, Edit3 } from "lucide-react";
+import { CheckCheck, Check, MoreVertical, Copy, Trash2, Reply, Smile, Edit3, ZoomIn } from "lucide-react";
 import { Message } from "@/types/message";
 import { AttachmentCard } from "./AttachmentCard";
 import { Dropdown } from "@/components/ui/Dropdown";
@@ -15,6 +15,7 @@ export interface MessageBubbleProps {
   onReact?: (id: string, emoji: string) => void;
   onReply?: (message: Message) => void;
   onEdit?: (message: Message) => void;
+  onImageClick?: (url: string, name?: string) => void;
 }
 
 export function MessageBubble({
@@ -25,6 +26,7 @@ export function MessageBubble({
   onReact,
   onReply,
   onEdit,
+  onImageClick,
 }: MessageBubbleProps) {
   const [reactionList, setReactionList] = useState(message.reactions || []);
 
@@ -60,7 +62,7 @@ export function MessageBubble({
       icon: <Copy className="w-3.5 h-3.5" />,
       onClick: () => navigator.clipboard.writeText(message.content),
     },
-    ...(isMe
+    ...(isMe && !message.deleted
       ? [
           {
             id: "edit",
@@ -68,27 +70,42 @@ export function MessageBubble({
             icon: <Edit3 className="w-3.5 h-3.5" />,
             onClick: () => onEdit?.(message),
           },
+          {
+            id: "delete",
+            label: "Delete",
+            icon: <Trash2 className="w-3.5 h-3.5 text-rose-500" />,
+            danger: true,
+            onClick: () => onDelete?.(message.id),
+          },
         ]
       : []),
-    {
-      id: "delete",
-      label: isMe ? "Delete for everyone" : "Remove for me",
-      icon: <Trash2 className="w-3.5 h-3.5" />,
-      danger: true,
-      onClick: () => onDelete?.(message.id),
-    },
   ];
+
+  // Detect image attachment or image type
+  const isImageAttachment =
+    message.type === "image" ||
+    message.attachment?.type === "image" ||
+    Boolean(message.attachment?.url?.match(/\.(jpeg|jpg|gif|png|webp|svg)($|\?)/i)) ||
+    Boolean(message.attachment?.url?.includes("res.cloudinary.com") && !message.attachment?.url?.endsWith(".pdf"));
+
+  const imageUrl = message.attachment?.url || (message.type === "image" && message.content.startsWith("http") ? message.content : null);
+
+  const shouldShowTextContent =
+    message.content &&
+    message.content !== imageUrl &&
+    message.content !== "Image" &&
+    message.content !== message.attachment?.name;
 
   return (
     <div
       className={cn(
-        "group relative flex flex-col my-1.5",
+        "flex flex-col group mb-3 animate-in fade-in slide-in-from-bottom-1 duration-150",
         isMe ? "items-end" : "items-start"
       )}
     >
       <div
         className={cn(
-          "relative max-w-[82%] sm:max-w-md px-4 py-2.5 rounded-2xl text-sm transition-all",
+          "relative max-w-[85%] sm:max-w-md px-4 py-2.5 rounded-2xl text-sm transition-all shadow-xs",
           isMe
             ? "bg-[#DDF2E8] dark:bg-[#17382B] text-[#17211D] dark:text-[#F1F5F3] rounded-tr-xs"
             : "bg-[#F4F6F5] dark:bg-[#1B2622] text-[#17211D] dark:text-[#F1F5F3] rounded-tl-xs"
@@ -97,7 +114,7 @@ export function MessageBubble({
         {/* Action menu trigger button on hover */}
         <div
           className={cn(
-            "absolute top-2 opacity-0 group-hover:opacity-100 transition-opacity",
+            "absolute top-2 opacity-0 group-hover:opacity-100 transition-opacity z-10",
             isMe ? "-left-8" : "-right-8"
           )}
         >
@@ -126,23 +143,45 @@ export function MessageBubble({
 
         {/* Sender name for received messages */}
         {!isMe && message.senderName && (
-          <div className="text-[11px] font-semibold text-[#168F67] dark:text-[#22A06B] mb-0.5 select-none">
+          <div className="text-[11px] font-semibold text-[#168F67] dark:text-[#22A06B] mb-1 select-none">
             {message.senderName}
           </div>
         )}
 
+        {/* Rich Photo / Image Preview */}
+        {isImageAttachment && imageUrl && (
+          <div className="mb-2 -mx-1 mt-0.5">
+            <div
+              onClick={() => onImageClick?.(imageUrl, message.attachment?.name || "Photo")}
+              className="relative group/img overflow-hidden rounded-xl cursor-pointer max-h-72 border border-black/5 dark:border-white/5 bg-black/5"
+            >
+              <img
+                src={imageUrl}
+                alt={message.attachment?.name || "Shared image"}
+                className="w-full h-auto max-h-72 object-cover transition-transform duration-200 group-hover/img:scale-105"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover/img:opacity-100">
+                <span className="p-2 rounded-full bg-black/60 text-white backdrop-blur-xs">
+                  <ZoomIn className="w-4 h-4" />
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Generic file attachment if not an image */}
+        {!isImageAttachment && message.attachment && (
+          <div className="mt-1 mb-2">
+            <AttachmentCard attachment={message.attachment} />
+          </div>
+        )}
+
         {/* Message text content */}
-        {message.content && (
+        {shouldShowTextContent && (
           <p className="leading-relaxed whitespace-pre-wrap select-text">
             {message.content}
           </p>
-        )}
-
-        {/* File attachment if present */}
-        {message.attachment && (
-          <div className="mt-2">
-            <AttachmentCard attachment={message.attachment} />
-          </div>
         )}
 
         {/* Timestamp, Edited Tag, and Delivery Status Tick */}
@@ -179,7 +218,7 @@ export function MessageBubble({
               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white dark:bg-[#151D1A] border border-[#E6EBE8] dark:border-[#212E29] text-xs shadow-xs"
             >
               <span>{reaction.emoji}</span>
-              <span className="text-[10px] font-bold text-[#66736D] dark:text-[#8E9C95]">
+              <span className="text-[10px] text-[#66736D] dark:text-[#8E9C95]">
                 {reaction.count}
               </span>
             </span>

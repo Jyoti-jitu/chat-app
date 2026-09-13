@@ -227,12 +227,26 @@ class MessageRepository:
             {"$set": update_fields},
         )
 
-    async def delete_messages_by_conversation(self, conversation_id: str) -> int:
+    async def delete_messages_by_conversation(
+        self, conversation_id: str, members: Optional[List[str]] = None
+    ) -> int:
         """Permanently deletes all messages belonging to a conversation."""
         oid = _to_object_id(conversation_id)
-        res = await self.collection.delete_many({
-            "$or": [{"conversation_id": conversation_id}, {"conversation_id": oid}]
-        })
+        queries: List[Dict[str, Any]] = [
+            {"conversation_id": str(conversation_id)},
+            {"conversation_id": oid},
+        ]
+        if members and len(members) >= 2:
+            queries.extend([
+                {"conversation_id": f"c_{members[0]}"},
+                {"conversation_id": f"c_{members[1]}"},
+            ])
+            if len(members) == 2:
+                queries.append({
+                    "sender_id": {"$in": members},
+                    "recipient_id": {"$in": members},
+                })
+        res = await self.collection.delete_many({"$or": queries})
         return res.deleted_count
 
 

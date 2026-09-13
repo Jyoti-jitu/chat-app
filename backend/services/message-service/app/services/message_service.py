@@ -174,6 +174,14 @@ class MessageService:
             str(current_user_id),
         )
 
+        # Invalidate Redis message cache for this conversation
+        try:
+            await redis_manager.delete(f"cache:messages:{conversation_id}:30")
+            await redis_manager.delete(f"cache:messages:{conversation_id}:50")
+            await redis_manager.delete(f"cache:messages:{conversation_id}:100")
+        except Exception:
+            pass
+
         return resp
 
     async def get_messages(
@@ -183,10 +191,21 @@ class MessageService:
         limit: int = 30,
         cursor: Optional[str] = None,
     ) -> MessageListResponse:
-        """Retrieves messages for a conversation thread with cursor pagination."""
+        """Retrieves messages for a conversation thread with Redis caching and cursor pagination."""
         from app.core.pagination import decode_cursor
 
         await self._verify_conversation_membership(current_user_id, conversation_id)
+
+        # 1. Check Redis cache on initial thread load (no cursor)
+        cache_key = f"cache:messages:{conversation_id}:{limit}"
+        if not cursor:
+            try:
+                cached_json = await redis_manager.get(cache_key)
+                if cached_json:
+                    logger.debug(f"Redis cache HIT for conversation [{conversation_id}] messages")
+                    return MessageListResponse.model_validate_json(cached_json)
+            except Exception as e:
+                logger.debug(f"Redis cache check skipped: {e}")
 
         cursor_time = None
         cursor_id = None
@@ -225,12 +244,22 @@ class MessageService:
             except Exception as err:
                 logger.warning(f"Failed to populate missing sender names: {err}")
 
-        return MessageListResponse(
+        resp = MessageListResponse(
             items=[self._to_response(doc) for doc in items],
             total=total,
             next_cursor=next_cursor,
             has_more=has_more,
         )
+
+        # 2. Store in Redis cache for instant repeat retrieval (5 minutes TTL)
+        if not cursor:
+            try:
+                await redis_manager.set(cache_key, resp.model_dump_json(), ex=300)
+                logger.debug(f"Cached {len(items)} messages in Redis for conversation [{conversation_id}]")
+            except Exception as e:
+                logger.debug(f"Redis cache write skipped: {e}")
+
+        return resp
 
     async def edit_message(
         self, current_user_id: str, message_id: str, payload: EditMessagePayload
@@ -344,16 +373,35 @@ class MessageService:
     async def delete_conversation_messages(
         self, current_user_id: str, conversation_id: str
     ) -> Dict[str, Any]:
-        """Permanently deletes all messages in a conversation."""
-        conv = await self._verify_conversation_membership(current_user_id, conversation_id)
-        count = await self.repo.delete_messages_by_conversation(conversation_id)
-        await self.repo.update_conversation_last_message(conversation_id, None)
+        """Permanently deletes all messages in a conversation from MongoDB Atlas."""
+        conv = None
+        if conversation_id.startswith("c_"):
+            other_id = conversation_id[2:]
+            conv = await self.repo.find_direct_conversation(current_user_id, other_id)
 
+        if not conv:
+            conv = await self._verify_conversation_membership(current_user_id, conversation_id)
+
+        canonical_id = conv["id"] if conv else conversation_id
         members = [str(m) for m in conv.get("members", [])] if conv else []
+
+        count = await self.repo.delete_messages_by_conversation(canonical_id, members)
+        await self.repo.update_conversation_last_message(canonical_id, None)
+
+        # Invalidate Redis cache
+        try:
+            await redis_manager.delete(f"cache:messages:{canonical_id}:30")
+            await redis_manager.delete(f"cache:messages:{canonical_id}:50")
+            await redis_manager.delete(f"cache:messages:{canonical_id}:100")
+            await redis_manager.delete(f"cache:messages:{conversation_id}:30")
+            await redis_manager.delete(f"cache:messages:{conversation_id}:50")
+        except Exception:
+            pass
+
         await self._dispatch_realtime_event(
             "messages.cleared",
-            {"conversation_id": conversation_id, "deleted_count": count},
-            conversation_id,
+            {"conversation_id": canonical_id, "deleted_count": count},
+            canonical_id,
             members,
             current_user_id,
         )

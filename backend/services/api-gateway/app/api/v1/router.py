@@ -8,12 +8,14 @@ from app.core.config import settings
 from app.services.http_proxy import proxy_request
 from app.api.v1.health import router as health_router
 from app.api.v1.docs import docs_router
+from app.api.v1.media import router as media_router
 
 api_router = APIRouter()
 
-# Attach health and documentation routes
+# Attach health, documentation, and media routes
 api_router.include_router(health_router, tags=["health"])
 api_router.include_router(docs_router)
+api_router.include_router(media_router)
 
 
 METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
@@ -37,6 +39,12 @@ async def proxy_users(request: Request, subpath: str = ""):
 @api_router.api_route("/contacts", methods=METHODS)
 @api_router.api_route("/contacts/{subpath:path}", methods=METHODS)
 async def proxy_contacts(request: Request, subpath: str = ""):
+    return await proxy_request(request, settings.USER_SERVICE_URL)
+
+
+@api_router.api_route("/status", methods=METHODS)
+@api_router.api_route("/status/{subpath:path}", methods=METHODS)
+async def proxy_status(request: Request, subpath: str = ""):
     return await proxy_request(request, settings.USER_SERVICE_URL)
 
 

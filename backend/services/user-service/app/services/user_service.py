@@ -53,6 +53,24 @@ class UserService:
                 clean_website = f"https://{clean_website}"
             update_dict["website"] = clean_website
 
+        # Auto-upload avatar to Cloudinary if sent as Data URI
+        if "avatar" in update_dict and update_dict["avatar"] and update_dict["avatar"].startswith("data:image/"):
+            try:
+                from shared.media.cloudinary_service import cloudinary_service
+                uploaded = cloudinary_service.upload_base64_data_uri(update_dict["avatar"], folder="fluxchat/avatars")
+                update_dict["avatar"] = uploaded.get("secure_url") or uploaded.get("url")
+            except Exception as err:
+                logger.warning(f"Cloudinary upload for avatar failed: {err}")
+
+        # Auto-upload cover_image to Cloudinary if sent as Data URI
+        if "cover_image" in update_dict and update_dict["cover_image"] and update_dict["cover_image"].startswith("data:image/"):
+            try:
+                from shared.media.cloudinary_service import cloudinary_service
+                uploaded = cloudinary_service.upload_base64_data_uri(update_dict["cover_image"], folder="fluxchat/covers")
+                update_dict["cover_image"] = uploaded.get("secure_url") or uploaded.get("url")
+            except Exception as err:
+                logger.warning(f"Cloudinary upload for cover_image failed: {err}")
+
         # Check username uniqueness if changed
         if "username" in update_dict and update_dict["username"]:
             clean_username = update_dict["username"].strip().lower()

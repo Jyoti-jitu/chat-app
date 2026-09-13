@@ -12,6 +12,7 @@ from app.schemas.conversation import (
     CreateDirectConversation,
     CreateGroupConversation,
     UpdateGroupConversation,
+    UpdateGroupSettingsPayload,
 )
 from app.services.conversation_service import conversation_service
 from shared.security.dependencies import get_current_user
@@ -173,5 +174,109 @@ async def delete_conversation(
     """Permanently deletes conversation and all its messages."""
     return await conversation_service.delete_conversation(
         current_user["id"], conversation_id
+    )
+
+
+@router.post(
+    "/{conversation_id}/join",
+    status_code=status.HTTP_200_OK,
+    summary="Join Group or Request to Join",
+    description="Allows a user to join an open group or submit a request for admin approval.",
+)
+async def join_group(
+    conversation_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Joins group or requests admission."""
+    return await conversation_service.join_conversation(
+        current_user["id"], conversation_id
+    )
+
+
+@router.get(
+    "/{conversation_id}/join-requests",
+    status_code=status.HTTP_200_OK,
+    summary="Get Pending Join Requests",
+    description="Retrieves pending join requests for an approval-based group (Admin only).",
+)
+async def get_group_join_requests(
+    conversation_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Fetches join requests."""
+    return await conversation_service.get_join_requests(
+        current_user["id"], conversation_id
+    )
+
+
+@router.post(
+    "/{conversation_id}/join-requests/{target_user_id}/approve",
+    response_model=ConversationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Approve Group Join Request",
+    description="Approves a pending user request to join the group (Admin only).",
+)
+async def approve_group_join_request(
+    conversation_id: str,
+    target_user_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> ConversationResponse:
+    """Approves user request."""
+    return await conversation_service.approve_join_request(
+        current_user["id"], conversation_id, target_user_id
+    )
+
+
+@router.post(
+    "/{conversation_id}/join-requests/{target_user_id}/reject",
+    response_model=ActionSuccessResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Reject Group Join Request",
+    description="Rejects a pending user request to join the group (Admin only).",
+)
+async def reject_group_join_request(
+    conversation_id: str,
+    target_user_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> ActionSuccessResponse:
+    """Rejects user request."""
+    return await conversation_service.reject_join_request(
+        current_user["id"], conversation_id, target_user_id
+    )
+
+
+@router.patch(
+    "/{conversation_id}/settings",
+    response_model=ConversationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update Group Settings",
+    description="Updates join mode ('open' | 'approval'), avatar, description, or title (Admin only).",
+)
+async def update_group_settings(
+    conversation_id: str,
+    payload: UpdateGroupSettingsPayload,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> ConversationResponse:
+    """Updates group settings."""
+    return await conversation_service.update_group_settings(
+        current_user["id"], conversation_id, payload
+    )
+
+
+@router.post(
+    "/{conversation_id}/members/{target_user_id}/admin",
+    response_model=ConversationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Promote Member to Admin",
+    description="Promotes a group participant to conversation admin (Admin only).",
+)
+async def promote_member_to_admin(
+    conversation_id: str,
+    target_user_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> ConversationResponse:
+    """Promotes participant to admin."""
+    return await conversation_service.promote_to_admin(
+        current_user["id"], conversation_id, target_user_id
     )
 

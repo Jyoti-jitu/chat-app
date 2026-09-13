@@ -29,6 +29,7 @@ import { User } from "@/types/user";
 import { getMyProfile, updateMyProfile } from "@/lib/api/user";
 import { getConversations } from "@/lib/api/chat";
 import { getContacts } from "@/lib/api/contact";
+import { uploadMedia } from "@/lib/api/media";
 
 // Helper to compress and convert client image files to responsive base64 data URIs
 function processImageFile(
@@ -125,6 +126,8 @@ export default function ProfilePage() {
   const [coverImage, setCoverImage] = useState<string | undefined>(user.coverImage);
 
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [successNotice, setSuccessNotice] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -216,20 +219,36 @@ export default function ProfilePage() {
     loadLiveProfileData();
   }, []);
 
-  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    processImageFile(file, (dataUri) => {
-      setAvatar(dataUri);
-    }, 400, 0.88);
+    try {
+      setIsUploadingAvatar(true);
+      const res = await uploadMedia(file, "fluxchat/avatars");
+      setAvatar(res.url);
+    } catch {
+      processImageFile(file, (dataUri) => {
+        setAvatar(dataUri);
+      }, 400, 0.88);
+    } finally {
+      setIsUploadingAvatar(false);
+    }
   };
 
-  const handleCoverFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    processImageFile(file, (dataUri) => {
-      setCoverImage(dataUri);
-    }, 1200, 0.82);
+    try {
+      setIsUploadingCover(true);
+      const res = await uploadMedia(file, "fluxchat/covers");
+      setCoverImage(res.url);
+    } catch {
+      processImageFile(file, (dataUri) => {
+        setCoverImage(dataUri);
+      }, 1200, 0.82);
+    } finally {
+      setIsUploadingCover(false);
+    }
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -589,11 +608,18 @@ export default function ProfilePage() {
                     type="button"
                     size="sm"
                     variant="secondary"
+                    disabled={isUploadingCover}
                     onClick={() => coverInputRef.current?.click()}
-                    leftIcon={<Upload className="w-3.5 h-3.5" />}
+                    leftIcon={
+                      isUploadingCover ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="w-3.5 h-3.5" />
+                      )
+                    }
                     className="bg-white/90 dark:bg-black/60 text-xs backdrop-blur-xs"
                   >
-                    {coverImage ? "Change Cover" : "Upload Cover"}
+                    {isUploadingCover ? "Uploading..." : coverImage ? "Change Cover" : "Upload Cover"}
                   </Button>
                   {coverImage && (
                     <Button
@@ -627,10 +653,17 @@ export default function ProfilePage() {
                     type="button"
                     size="sm"
                     variant="secondary"
+                    disabled={isUploadingAvatar}
                     onClick={() => avatarInputRef.current?.click()}
-                    leftIcon={<Upload className="w-3.5 h-3.5" />}
+                    leftIcon={
+                      isUploadingAvatar ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="w-3.5 h-3.5" />
+                      )
+                    }
                   >
-                    {avatar ? "Change Photo" : "Upload Photo"}
+                    {isUploadingAvatar ? "Uploading..." : avatar ? "Change Photo" : "Upload Photo"}
                   </Button>
                   {avatar && (
                     <Button

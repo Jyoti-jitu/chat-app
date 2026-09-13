@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { Search, SquarePen, Users, MessageSquare, Loader2, Plus, Check } from "lucide-react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { Search, SquarePen, Users, MessageSquare, Loader2, Plus, Check, Camera, Shield, UserCheck, Image as ImageIcon } from "lucide-react";
 import { Tabs } from "@/components/ui/Tabs";
 import { ConversationItem } from "./ConversationItem";
 import { Modal } from "@/components/ui/Modal";
@@ -18,6 +18,7 @@ import {
 } from "@/lib/api/chat";
 import { getContacts, ContactItem } from "@/lib/api/contact";
 import { wsClient } from "@/lib/api/websocket";
+import { uploadMedia } from "@/lib/api/media";
 
 export interface ConversationListProps {
   activeId?: string;
@@ -64,6 +65,11 @@ export function ConversationList({ activeId, className }: ConversationListProps)
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"direct" | "group">("direct");
   const [groupName, setGroupName] = useState("");
+  const [groupDescription, setGroupDescription] = useState("");
+  const [groupAvatarUrl, setGroupAvatarUrl] = useState<string | null>(null);
+  const [groupJoinMode, setGroupJoinMode] = useState<"open" | "approval">("open");
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const groupAvatarInputRef = useRef<HTMLInputElement>(null);
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -299,7 +305,7 @@ export function ConversationList({ activeId, className }: ConversationListProps)
   const handleDeleteConversation = async (id: string) => {
     const token = getAuthToken();
 
-    if (token && !id.startsWith("c1") && !id.startsWith("c2")) {
+    if (token) {
       try {
         await deleteConversation(id, token);
       } catch (err: any) {
@@ -307,8 +313,8 @@ export function ConversationList({ activeId, className }: ConversationListProps)
       }
     }
 
-    setConversations((prev) => prev.filter((c) => c.id !== id));
-    if (activeId === id) {
+    setConversations((prev) => prev.filter((c) => c.id !== id && c.otherUserId !== id.replace(/^c_/, "")));
+    if (activeId === id || activeId === `c_${id}`) {
       router.push("/app/chats");
     }
   };
@@ -334,9 +340,24 @@ export function ConversationList({ activeId, className }: ConversationListProps)
     }
   };
 
+  const handleGroupAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const token = getAuthToken();
+    try {
+      setIsUploadingAvatar(true);
+      const res = await uploadMedia(file, "fluxchat/groups", token || undefined);
+      setGroupAvatarUrl(res.url);
+    } catch (err: any) {
+      alert(err.message || "Failed to upload group avatar");
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!groupName.trim() || selectedContactIds.length === 0) return;
+    if (!groupName.trim()) return;
 
     const token = getAuthToken();
     if (!token) return;
@@ -346,12 +367,18 @@ export function ConversationList({ activeId, className }: ConversationListProps)
       const conv = await createGroupConversation(
         {
           name: groupName.trim(),
+          description: groupDescription.trim() || undefined,
+          avatar: groupAvatarUrl || undefined,
+          join_mode: groupJoinMode,
           member_ids: selectedContactIds,
         },
         token
       );
       setIsNewChatModalOpen(false);
       setGroupName("");
+      setGroupDescription("");
+      setGroupAvatarUrl(null);
+      setGroupJoinMode("open");
       setSelectedContactIds([]);
       await fetchConversations();
       router.push(`/app/chats/${conv.id}`);
@@ -618,19 +645,110 @@ export function ConversationList({ activeId, className }: ConversationListProps)
           </div>
         ) : (
           <form onSubmit={handleCreateGroup} className="space-y-4">
+            {/* Group Avatar Upload */}
+            <div className="flex items-center gap-4">
+              <div
+                onClick={() => groupAvatarInputRef.current?.click()}
+                className="relative w-14 h-14 rounded-2xl bg-[#F4F6F5] dark:bg-[#1D2723] border border-dashed border-[#168F67]/40 flex items-center justify-center cursor-pointer overflow-hidden group hover:border-[#168F67] transition-colors shrink-0"
+                title="Click to upload group icon"
+              >
+                {groupAvatarUrl ? (
+                  <img src={groupAvatarUrl} alt="Group Icon" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-[#66736D] dark:text-[#8E9C95]">
+                    {isUploadingAvatar ? (
+                      <Loader2 className="w-5 h-5 animate-spin text-[#168F67]" />
+                    ) : (
+                      <Camera className="w-5 h-5 group-hover:text-[#168F67] transition-colors" />
+                    )}
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                  <Camera className="w-4 h-4 text-white" />
+                </div>
+              </div>
+              <input
+                ref={groupAvatarInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleGroupAvatarUpload}
+                className="hidden"
+              />
+              <div className="text-left min-w-0">
+                <p className="text-xs font-semibold text-[#17211D] dark:text-[#F1F5F3]">Group Icon</p>
+                <p className="text-[11px] text-[#66736D] dark:text-[#8E9C95]">Upload photo via Cloudinary (optional)</p>
+              </div>
+            </div>
+
             <Input
               id="groupName"
               label="Group Name"
-              placeholder="e.g. Project Alpha, Family, Core Team"
+              placeholder="e.g. Project Alpha, Design Team, Family"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
               required
             />
+
+            <div>
+              <label className="text-xs font-semibold text-[#17211D] dark:text-[#F1F5F3] block mb-1">
+                Description (optional)
+              </label>
+              <textarea
+                rows={2}
+                value={groupDescription}
+                onChange={(e) => setGroupDescription(e.target.value)}
+                placeholder="What is this group about?"
+                className="w-full text-xs rounded-xl border border-[#E6EBE8] dark:border-[#212E29] bg-transparent p-2.5 text-[#17211D] dark:text-[#F1F5F3] focus:outline-hidden focus:ring-1 focus:ring-[#168F67]"
+              />
+            </div>
+
+            {/* Join Mode Selector */}
             <div>
               <label className="text-xs font-semibold text-[#17211D] dark:text-[#F1F5F3] block mb-2">
-                Select Participants ({selectedContactIds.length} selected)
+                Join Policy
               </label>
-              <div className="space-y-1.5 max-h-48 overflow-y-auto border border-[#E6EBE8] dark:border-[#212E29] rounded-xl p-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div
+                  onClick={() => setGroupJoinMode("open")}
+                  className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all ${
+                    groupJoinMode === "open"
+                      ? "border-[#168F67] bg-[#EAF5F0] dark:bg-[#1B2F25] text-[#168F67] dark:text-[#22A06B]"
+                      : "border-[#E6EBE8] dark:border-[#212E29] hover:bg-[#F4F6F5] dark:hover:bg-[#1D2723]"
+                  }`}
+                >
+                  <p className="text-xs font-bold flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5" />
+                    <span>Anyone Can Join</span>
+                  </p>
+                  <p className="text-[10px] text-[#66736D] dark:text-[#8E9C95] mt-1">
+                    Users join immediately upon clicking link
+                  </p>
+                </div>
+
+                <div
+                  onClick={() => setGroupJoinMode("approval")}
+                  className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all ${
+                    groupJoinMode === "approval"
+                      ? "border-[#168F67] bg-[#EAF5F0] dark:bg-[#1B2F25] text-[#168F67] dark:text-[#22A06B]"
+                      : "border-[#E6EBE8] dark:border-[#212E29] hover:bg-[#F4F6F5] dark:hover:bg-[#1D2723]"
+                  }`}
+                >
+                  <p className="text-xs font-bold flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5" />
+                    <span>Admin Approval</span>
+                  </p>
+                  <p className="text-[10px] text-[#66736D] dark:text-[#8E9C95] mt-1">
+                    Admins must approve each join request
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-[#17211D] dark:text-[#F1F5F3] block mb-2">
+                Select Initial Participants ({selectedContactIds.length} selected)
+              </label>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto border border-[#E6EBE8] dark:border-[#212E29] rounded-xl p-2">
                 {contacts.length > 0 ? (
                   contacts.map((item: any) => {
                     const id = item.contact_id || item.id;
@@ -668,7 +786,7 @@ export function ConversationList({ activeId, className }: ConversationListProps)
                   })
                 ) : (
                   <p className="text-center py-4 text-xs text-[#66736D] dark:text-[#8E9C95]">
-                    No contacts available to add.
+                    No contacts available yet. You can invite members later!
                   </p>
                 )}
               </div>
@@ -686,7 +804,7 @@ export function ConversationList({ activeId, className }: ConversationListProps)
               <Button
                 type="submit"
                 size="sm"
-                disabled={isCreating || !groupName.trim() || selectedContactIds.length === 0}
+                disabled={isCreating || !groupName.trim() || isUploadingAvatar}
               >
                 {isCreating ? (
                   <div className="flex items-center gap-2">

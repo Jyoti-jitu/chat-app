@@ -151,6 +151,88 @@ class ConversationRepository:
         })
         return res.deleted_count > 0
 
+    async def add_admin(
+        self, conversation_id: str, user_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Promotes a member to conversation admin."""
+        oid = _to_object_id(conversation_id)
+        now = datetime.now(timezone.utc)
+        await self.conversations.update_one(
+            {"$or": [{"_id": oid}, {"_id": conversation_id}]},
+            {
+                "$addToSet": {"admins": user_id},
+                "$set": {"updated_at": now},
+            },
+        )
+        return await self.find_by_id(conversation_id)
+
+    async def add_join_request(
+        self, conversation_id: str, request_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Adds or updates a pending join request in the conversation document."""
+        oid = _to_object_id(conversation_id)
+        now = datetime.now(timezone.utc)
+        # Pull any existing request from this user first to avoid duplicates
+        await self.conversations.update_one(
+            {"$or": [{"_id": oid}, {"_id": conversation_id}]},
+            {"$pull": {"join_requests": {"user_id": request_data["user_id"]}}},
+        )
+        await self.conversations.update_one(
+            {"$or": [{"_id": oid}, {"_id": conversation_id}]},
+            {
+                "$push": {"join_requests": request_data},
+                "$set": {"updated_at": now},
+            },
+        )
+        return await self.find_by_id(conversation_id)
+
+    async def remove_join_request(
+        self, conversation_id: str, user_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Removes a user's join request from the conversation."""
+        oid = _to_object_id(conversation_id)
+        now = datetime.now(timezone.utc)
+        await self.conversations.update_one(
+            {"$or": [{"_id": oid}, {"_id": conversation_id}]},
+            {
+                "$pull": {"join_requests": {"user_id": user_id}},
+                "$set": {"updated_at": now},
+            },
+        )
+        return await self.find_by_id(conversation_id)
+
+    async def purge_all_conversation_messages(
+        self, conversation_id: str, member_ids: Optional[List[str]] = None
+    ) -> int:
+        """
+        Permanently purges ALL messages associated with this conversation from MongoDB Atlas.
+        Matches conversation_id as string, ObjectId, virtual c_ IDs, and bilateral participant messages.
+        """
+        db = db_manager.get_database()
+        oid = _to_object_id(conversation_id)
+        cid_str = str(conversation_id)
+
+        queries: List[Dict[str, Any]] = [
+            {"conversation_id": cid_str},
+            {"conversation_id": oid},
+        ]
+
+        if member_ids and len(member_ids) >= 2:
+            u1, u2 = member_ids[0], member_ids[1]
+            queries.extend([
+                {"conversation_id": f"c_{u1}"},
+                {"conversation_id": f"c_{u2}"},
+            ])
+            # Purge any 1:1 direct messages exchanged between these two users
+            if len(member_ids) == 2:
+                queries.append({
+                    "sender_id": {"$in": member_ids},
+                    "recipient_id": {"$in": member_ids},
+                })
+
+        res = await db["messages"].delete_many({"$or": queries})
+        return res.deleted_count
+
     async def get_users_profiles(
         self, user_ids: List[str]
     ) -> Dict[str, Dict[str, Any]]:

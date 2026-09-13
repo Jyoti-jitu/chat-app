@@ -17,6 +17,8 @@ import {
   Clock,
   UserCheck,
   Loader2,
+  Download,
+  X as CloseIcon,
 } from "lucide-react";
 import {
   getMessages,
@@ -30,6 +32,7 @@ import {
   deleteConversation,
   clearConversationMessages,
   createOrGetDirectConversation,
+  ConversationItem,
 } from "@/lib/api/chat";
 import { getUserPublicProfile } from "@/lib/api/user";
 import { getStoredToken } from "@/lib/api/auth";
@@ -39,6 +42,16 @@ import {
   acceptContactRequest,
 } from "@/lib/api/contact";
 import { wsClient } from "@/lib/api";
+import { GroupSettingsModal } from "@/components/chat/GroupSettingsModal";
+import { uploadMedia } from "@/lib/api/media";
+
+interface ConversationState {
+  id: string;
+  name: string;
+  avatar?: string;
+  isOnline?: boolean;
+  type?: "direct" | "group";
+}
 
 export default function IndividualChatPage({
   params,
@@ -72,15 +85,12 @@ export default function IndividualChatPage({
     return "u_me";
   });
 
-  const [conversation, setConversation] = useState<{
-    id: string;
-    name: string;
-    avatar?: string;
-    isOnline?: boolean;
-  }>({
+  const [conversation, setConversation] = useState<ConversationState>({
     id: conversationId,
     name: "Chat",
+    type: "direct",
   });
+  const [conversationItem, setConversationItem] = useState<ConversationItem | null>(null);
 
   const conversationRef = useRef(conversation);
   const otherUserIdRef = useRef<string | null>(null);
@@ -90,10 +100,15 @@ export default function IndividualChatPage({
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
 
   // Reply and Edit state
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+
+  // Lightbox & Group Settings Modals
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; name?: string } | null>(null);
+  const [isGroupSettingsOpen, setIsGroupSettingsOpen] = useState(false);
 
   // General section & pending connection request state
   const [isInGeneral, setIsInGeneral] = useState(false);
@@ -121,7 +136,6 @@ export default function IndividualChatPage({
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-    // User is near bottom if within 150px
     isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 150;
   };
 
@@ -165,11 +179,13 @@ export default function IndividualChatPage({
       try {
         const directConv = await createOrGetDirectConversation(recipientId, token);
         targetId = directConv.id;
+        setConversationItem(directConv);
         setConversation({
           id: directConv.id,
           name: directConv.name || "Direct Chat",
           avatar: directConv.avatar || undefined,
           isOnline: directConv.members?.some((m: any) => m.is_online) || false,
+          type: "direct",
         });
         // Transition URL to real conversation ID so socket events and routes match canonical thread
         router.replace(`/app/chats/${directConv.id}`);
@@ -185,6 +201,7 @@ export default function IndividualChatPage({
             name: publicProfile.name,
             avatar: publicProfile.avatar || undefined,
             isOnline: publicProfile.is_online,
+            type: "direct",
           });
         } catch (e: any) {
           console.warn("Could not fetch recipient profile:", e.message);
@@ -193,6 +210,7 @@ export default function IndividualChatPage({
     } else {
       try {
         const convDetails = await getConversationDetails(conversationId, token);
+        setConversationItem(convDetails);
         if (convDetails.type === "direct") {
           const other = convDetails.members.find((m) => m.id !== myUserId);
           if (other) {
@@ -205,6 +223,7 @@ export default function IndividualChatPage({
           name: convDetails.name || (convDetails.type === "group" ? "Group Chat" : "Direct Chat"),
           avatar: convDetails.avatar || undefined,
           isOnline: convDetails.members.some((m) => m.is_online),
+          type: convDetails.type,
         });
       } catch (err: any) {
         if (err?.message?.includes("401") || err?.message?.toLowerCase().includes("unauthorized")) {
@@ -243,34 +262,43 @@ export default function IndividualChatPage({
       setPendingReceivedRequestId(null);
     }
 
-    // 2. Fetch live messages
+    // 2. Fetch live messages (backed by Redis cache & DB)
     try {
       const res = await getMessages(targetId, 100, undefined, token);
       if (res.items && res.items.length > 0) {
-        const mapped: Message[] = res.items.map((item) => ({
-          id: item.id,
-          conversationId: item.conversation_id,
-          senderId: item.sender_id,
-          senderName: item.sender_name || undefined,
-          content: item.content,
-          type: item.type as "text" | "file",
-          attachment: item.attachment
-            ? {
-                name: item.attachment.name,
-                size: item.attachment.size,
-                type: "file",
-              }
-            : undefined,
-          replyTo: item.reply_to || undefined,
-          edited: item.edited || false,
-          createdAt: item.created_at
-            ? new Date(item.created_at).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : "Now",
-          status: item.status,
-        }));
+        const mapped: Message[] = res.items.map((item) => {
+          const isImg =
+            item.type === "image" ||
+            item.attachment?.type === "image" ||
+            Boolean(item.attachment?.url && /\.(jpe?g|png|webp|gif|svg)($|\?)/i.test(item.attachment.url)) ||
+            Boolean(item.attachment?.url?.includes("res.cloudinary.com") && !item.attachment?.url?.endsWith(".pdf"));
+
+          return {
+            id: item.id,
+            conversationId: item.conversation_id,
+            senderId: item.sender_id,
+            senderName: item.sender_name || undefined,
+            content: item.content,
+            type: (isImg ? "image" : item.type) as "text" | "file" | "image",
+            attachment: item.attachment
+              ? {
+                  name: item.attachment.name,
+                  size: item.attachment.size,
+                  type: (isImg ? "image" : "file") as "image" | "file",
+                  url: item.attachment.url,
+                }
+              : undefined,
+            replyTo: item.reply_to || undefined,
+            edited: item.edited || false,
+            createdAt: item.created_at
+              ? new Date(item.created_at).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "Now",
+            status: item.status,
+          };
+        });
 
         setMessages((prev) => {
           if (prev.length === 0) return mapped;
@@ -281,13 +309,15 @@ export default function IndividualChatPage({
               if (
                 item.status !== existing.status ||
                 item.edited !== existing.edited ||
-                item.content !== existing.content
+                item.content !== existing.content ||
+                item.attachment?.url !== existing.attachment?.url
               ) {
                 existingMap.set(item.id, {
                   ...existing,
                   status: item.status,
                   edited: item.edited,
                   content: item.content,
+                  attachment: item.attachment,
                 });
               }
             } else {
@@ -345,46 +375,56 @@ export default function IndividualChatPage({
           (currentOtherId && (msgData.sender_id === currentOtherId || msgData.recipient_id === currentOtherId));
 
         if (matchesThread) {
+          const isImg =
+            msgData.type === "image" ||
+            msgData.attachment?.type === "image" ||
+            Boolean(msgData.attachment?.url && /\.(jpe?g|png|webp|gif|svg)($|\?)/i.test(msgData.attachment.url)) ||
+            Boolean(msgData.attachment?.url?.includes("res.cloudinary.com") && !msgData.attachment?.url?.endsWith(".pdf"));
+
+          const incomingMsg: Message = {
+            id: msgData.id,
+            conversationId: msgData.conversation_id,
+            senderId: msgData.sender_id,
+            senderName: msgData.sender_name || undefined,
+            content: msgData.content,
+            type: (isImg ? "image" : msgData.type || "text") as "text" | "file" | "image",
+            attachment: msgData.attachment
+              ? {
+                  name: msgData.attachment.name,
+                  size: msgData.attachment.size,
+                  type: (isImg ? "image" : "file") as "image" | "file",
+                  url: msgData.attachment.url,
+                }
+              : undefined,
+            replyTo: msgData.reply_to || undefined,
+            edited: msgData.edited || false,
+            createdAt: msgData.created_at
+              ? new Date(msgData.created_at).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "Now",
+            status: msgData.status || "sent",
+          };
+
           setMessages((prev) => {
+            // If already present (or replaces optimistic temp message with same content)
             if (prev.some((m) => m.id === msgData.id)) {
-              return prev.map((m) =>
-                m.id === msgData.id
-                  ? {
-                      ...m,
-                      status: msgData.status || m.status,
-                      content: msgData.content || m.content,
-                      edited: msgData.edited ?? m.edited,
-                    }
-                  : m
-              );
+              return prev.map((m) => (m.id === msgData.id ? incomingMsg : m));
             }
-            return [
-              ...prev,
-              {
-                id: msgData.id,
-                conversationId: msgData.conversation_id,
-                senderId: msgData.sender_id,
-                senderName: msgData.sender_name || undefined,
-                content: msgData.content,
-                type: (msgData.type as "text" | "file") || "text",
-                attachment: msgData.attachment
-                  ? {
-                      name: msgData.attachment.name,
-                      size: msgData.attachment.size,
-                      type: "file",
-                    }
-                  : undefined,
-                replyTo: msgData.reply_to || undefined,
-                edited: msgData.edited || false,
-                createdAt: msgData.created_at
-                  ? new Date(msgData.created_at).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                  : "Now",
-                status: msgData.status || "sent",
-              },
-            ];
+            // Replace matching temp message from current sender
+            const tempIdx = prev.findIndex(
+              (m) =>
+                m.id.startsWith("temp_") &&
+                m.senderId === incomingMsg.senderId &&
+                m.content === incomingMsg.content
+            );
+            if (tempIdx !== -1) {
+              const updated = [...prev];
+              updated[tempIdx] = incomingMsg;
+              return updated;
+            }
+            return [...prev, incomingMsg];
           });
 
           if (msgData.sender_id !== currentUserId && token) {
@@ -515,30 +555,40 @@ export default function IndividualChatPage({
           try {
             const res = await getMessages(currentTargetId, 50, undefined, t);
             if (res.items && res.items.length > 0) {
-              const mapped: Message[] = res.items.map((item) => ({
-                id: item.id,
-                conversationId: item.conversation_id,
-                senderId: item.sender_id,
-                senderName: item.sender_name || undefined,
-                content: item.content,
-                type: (item.type as "text" | "file") || "text",
-                attachment: item.attachment
-                  ? {
-                      name: item.attachment.name,
-                      size: item.attachment.size,
-                      type: "file",
-                    }
-                  : undefined,
-                replyTo: item.reply_to || undefined,
-                edited: item.edited || false,
-                createdAt: item.created_at
-                  ? new Date(item.created_at).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                  : "Now",
-                status: item.status || "sent",
-              }));
+              const mapped: Message[] = res.items.map((item) => {
+                const isImg =
+                  item.type === "image" ||
+                  item.attachment?.type === "image" ||
+                  Boolean(item.attachment?.url && /\.(jpe?g|png|webp|gif|svg)($|\?)/i.test(item.attachment.url)) ||
+                  Boolean(item.attachment?.url?.includes("res.cloudinary.com") && !item.attachment?.url?.endsWith(".pdf"));
+
+                return {
+                  id: item.id,
+                  conversationId: item.conversation_id,
+                  senderId: item.sender_id,
+                  senderName: item.sender_name || undefined,
+                  content: item.content,
+                  type: (isImg ? "image" : item.type) as "text" | "file" | "image",
+                  attachment: item.attachment
+                    ? {
+                        name: item.attachment.name,
+                        size: item.attachment.size,
+                        type: (isImg ? "image" : "file") as "image" | "file",
+                        url: item.attachment.url,
+                      }
+                    : undefined,
+                  replyTo: item.reply_to || undefined,
+                  edited: item.edited || false,
+                  createdAt: item.created_at
+                    ? new Date(item.created_at).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "Now",
+                  status: item.status || "sent",
+                };
+              });
+
               setMessages((prev) => {
                 const existingMap = new Map(prev.map((m) => [m.id, m]));
                 for (const item of mapped) {
@@ -547,13 +597,15 @@ export default function IndividualChatPage({
                     if (
                       item.status !== existing.status ||
                       item.edited !== existing.edited ||
-                      item.content !== existing.content
+                      item.content !== existing.content ||
+                      item.attachment?.url !== existing.attachment?.url
                     ) {
                       existingMap.set(item.id, {
                         ...existing,
                         status: item.status,
                         edited: item.edited,
                         content: item.content,
+                        attachment: item.attachment,
                       });
                     }
                   } else {
@@ -583,6 +635,7 @@ export default function IndividualChatPage({
     }
   }, [fetchThreadData, conversationId, currentUserId, router]);
 
+  // Instant optimistic send for text messages
   const handleSendMessage = async (content: string, replyToId?: string) => {
     const token = getStoredToken();
     if (!token) return;
@@ -600,6 +653,23 @@ export default function IndividualChatPage({
       }
     }
 
+    const tempId = "temp_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7);
+    const optimisticMsg: Message = {
+      id: tempId,
+      conversationId: targetConvId,
+      senderId: currentUserId,
+      senderName: "You",
+      content: content.trim(),
+      type: "text",
+      replyTo: replyToId,
+      edited: false,
+      createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "sent",
+    };
+
+    setMessages((prev) => [...prev, optimisticMsg]);
+    setReplyingTo(null);
+
     try {
       const created = await sendMessage(
         targetConvId,
@@ -610,25 +680,24 @@ export default function IndividualChatPage({
         },
         token
       );
-      const newMsg: Message = {
-        id: created.id,
-        conversationId: created.conversation_id,
-        senderId: created.sender_id,
-        senderName: created.sender_name || undefined,
-        content: created.content,
-        type: "text",
-        replyTo: created.reply_to || undefined,
-        edited: created.edited || false,
-        createdAt: created.created_at
-          ? new Date(created.created_at).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : "Now",
-        status: created.status,
-      };
-      setMessages((prev) => [...prev, newMsg]);
-      setReplyingTo(null);
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === tempId
+            ? {
+                ...m,
+                id: created.id,
+                status: created.status,
+                createdAt: created.created_at
+                  ? new Date(created.created_at).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : m.createdAt,
+              }
+            : m
+        )
+      );
     } catch (err: any) {
       const errMsg = err?.message?.toLowerCase() || "";
       if ((errMsg.includes("404") || errMsg.includes("not found")) && otherUserIdRef.current) {
@@ -645,32 +714,116 @@ export default function IndividualChatPage({
             },
             token
           );
-          const newMsg: Message = {
-            id: retried.id,
-            conversationId: retried.conversation_id,
-            senderId: retried.sender_id,
-            senderName: retried.sender_name || undefined,
-            content: retried.content,
-            type: "text",
-            replyTo: retried.reply_to || undefined,
-            edited: retried.edited || false,
-            createdAt: retried.created_at
-              ? new Date(retried.created_at).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              : "Now",
-            status: retried.status,
-          };
-          setMessages((prev) => [...prev, newMsg]);
-          setReplyingTo(null);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === tempId
+                ? {
+                    ...m,
+                    id: retried.id,
+                    conversationId: retried.conversation_id,
+                    status: retried.status,
+                  }
+                : m
+            )
+          );
           return;
         } catch (retryErr: any) {
+          setMessages((prev) => prev.filter((m) => m.id !== tempId));
           showToast(retryErr.message || "Failed to send message", "error");
           return;
         }
       }
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
       showToast(err.message || "Failed to send message", "error");
+    }
+  };
+
+  // Upload file to Cloudinary & instantly render in chat
+  const handleSendFile = async (file: File) => {
+    const token = getStoredToken();
+    if (!token) return;
+
+    let targetConvId = conversation.id;
+    if (targetConvId.startsWith("c_")) {
+      const recipientId = targetConvId.replace(/^c_/, "");
+      try {
+        const directConv = await createOrGetDirectConversation(recipientId, token);
+        targetConvId = directConv.id;
+        setConversation((prev) => ({ ...prev, id: directConv.id }));
+      } catch (err: any) {
+        showToast(err.message || "Could not open conversation", "error");
+        return;
+      }
+    }
+
+    const isImage = file.type.startsWith("image/");
+    const fileSizeStr =
+      file.size > 1024 * 1024
+        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+        : `${Math.round(file.size / 1024)} KB`;
+
+    const localPreviewUrl = isImage ? URL.createObjectURL(file) : undefined;
+    const tempId = "temp_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7);
+
+    const optimisticMsg: Message = {
+      id: tempId,
+      conversationId: targetConvId,
+      senderId: currentUserId,
+      senderName: "You",
+      content: isImage ? "Photo" : file.name,
+      type: isImage ? "image" : "file",
+      attachment: {
+        name: file.name,
+        size: fileSizeStr,
+        type: isImage ? "image" : "file",
+        url: localPreviewUrl,
+      },
+      createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: "sent",
+    };
+
+    setMessages((prev) => [...prev, optimisticMsg]);
+    setIsUploadingAttachment(true);
+
+    try {
+      const mediaRes = await uploadMedia(file, "fluxchat/chat", token);
+      const mediaUrl = mediaRes.url;
+
+      const created = await sendMessage(
+        targetConvId,
+        {
+          content: isImage ? "Photo" : file.name,
+          type: isImage ? "image" : "file",
+          attachment: {
+            name: file.name,
+            size: fileSizeStr,
+            url: mediaUrl,
+            type: isImage ? "image" : "file",
+          },
+        },
+        token
+      );
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === tempId
+            ? {
+                ...m,
+                id: created.id,
+                status: created.status,
+                attachment: {
+                  ...m.attachment!,
+                  url: mediaUrl,
+                },
+              }
+            : m
+        )
+      );
+    } catch (err: any) {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      showToast(err.message || "Failed to upload and send file", "error");
+    } finally {
+      setIsUploadingAttachment(false);
     }
   };
 
@@ -700,115 +853,6 @@ export default function IndividualChatPage({
     wsClient.sendTyping(targetId, typing, recipientId ? [recipientId] : undefined);
   };
 
-  const handleSendAttachment = async (file: {
-    name: string;
-    size: string;
-    type: "file";
-  }) => {
-    const token = getStoredToken();
-    if (!token) return;
-
-    let targetConvId = conversation.id;
-    if (targetConvId.startsWith("c_")) {
-      const recipientId = targetConvId.replace(/^c_/, "");
-      try {
-        const directConv = await createOrGetDirectConversation(recipientId, token);
-        targetConvId = directConv.id;
-        setConversation((prev) => ({ ...prev, id: directConv.id }));
-      } catch (err: any) {
-        showToast(err.message || "Could not open conversation", "error");
-        return;
-      }
-    }
-
-    try {
-      const created = await sendMessage(
-        targetConvId,
-        {
-          content: file.name,
-          type: "file",
-          attachment: {
-            name: file.name,
-            size: file.size,
-            url: "#",
-            type: "file",
-          },
-        },
-        token
-      );
-      const newMsg: Message = {
-        id: created.id,
-        conversationId: created.conversation_id,
-        senderId: created.sender_id,
-        senderName: created.sender_name || undefined,
-        content: created.content,
-        type: "file",
-        attachment: {
-          name: file.name,
-          size: file.size,
-          type: "file",
-        },
-        createdAt: created.created_at
-          ? new Date(created.created_at).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : "Now",
-        status: created.status,
-      };
-      setMessages((prev) => [...prev, newMsg]);
-    } catch (err: any) {
-      const errMsg = err?.message?.toLowerCase() || "";
-      if ((errMsg.includes("404") || errMsg.includes("not found")) && otherUserIdRef.current) {
-        try {
-          const directConv = await createOrGetDirectConversation(otherUserIdRef.current, token);
-          setConversation((prev) => ({ ...prev, id: directConv.id }));
-          router.replace(`/app/chats/${directConv.id}`);
-          const retried = await sendMessage(
-            directConv.id,
-            {
-              content: file.name,
-              type: "file",
-              attachment: {
-                name: file.name,
-                size: file.size,
-                url: "#",
-                type: "file",
-              },
-            },
-            token
-          );
-          const newMsg: Message = {
-            id: retried.id,
-            conversationId: retried.conversation_id,
-            senderId: retried.sender_id,
-            senderName: retried.sender_name || undefined,
-            content: retried.content,
-            type: "file",
-            attachment: {
-              name: file.name,
-              size: file.size,
-              type: "file",
-            },
-            createdAt: retried.created_at
-              ? new Date(retried.created_at).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              : "Now",
-            status: retried.status,
-          };
-          setMessages((prev) => [...prev, newMsg]);
-          return;
-        } catch (retryErr: any) {
-          showToast(retryErr.message || "Failed to upload file", "error");
-          return;
-        }
-      }
-      showToast(err.message || "Failed to upload file", "error");
-    }
-  };
-
   const handleDeleteMessage = async (id: string) => {
     const token = getStoredToken();
     const targetMsg = messages.find((m) => m.id === id);
@@ -829,16 +873,16 @@ export default function IndividualChatPage({
         showToast(err.message || "Failed to delete message", "error");
       }
     } else {
-      // Non-author removing message locally for themselves (avoids 403 error)
       setMessages((prev) => prev.filter((m) => m.id !== id));
       showToast("Message removed");
     }
   };
 
+  // Permanently clear messages and purge from DB & cache
   const handleConfirmClearMessages = async () => {
     const token = getStoredToken();
     const targetId = conversationRef.current.id || conversationId;
-    if (token && targetId && !targetId.startsWith("c_")) {
+    if (token && targetId) {
       try {
         await clearConversationMessages(targetId, token);
       } catch (err: any) {
@@ -850,10 +894,11 @@ export default function IndividualChatPage({
     showToast("Chat history cleared permanently", "success");
   };
 
+  // Permanently delete conversation, purge all messages and stored contact data
   const handleConfirmDeleteChat = async () => {
     const token = getStoredToken();
     const targetId = conversationRef.current.id || conversationId;
-    if (token && targetId && !targetId.startsWith("c_")) {
+    if (token && targetId) {
       try {
         await deleteConversation(targetId, token);
       } catch (err: any) {
@@ -861,7 +906,7 @@ export default function IndividualChatPage({
       }
     }
     setIsDeleteChatModalOpen(false);
-    showToast("Conversation and messages permanently deleted", "success");
+    showToast("Conversation and data permanently purged", "success");
     router.push("/app/chats");
   };
 
@@ -883,6 +928,9 @@ export default function IndividualChatPage({
       setIsAcceptingInChat(false);
     }
   };
+
+  const isGroup = conversation.type === "group";
+  const pendingRequestsCount = conversationItem?.join_requests?.length || 0;
 
   return (
     <div className="flex h-full w-full overflow-hidden">
@@ -917,6 +965,9 @@ export default function IndividualChatPage({
           name={conversation.name}
           avatar={conversation.avatar}
           isOnline={conversation.isOnline}
+          isGroup={isGroup}
+          pendingRequestsCount={pendingRequestsCount}
+          onOpenGroupSettings={() => setIsGroupSettingsOpen(true)}
           onClearMessages={() => setIsClearModalOpen(true)}
           onDeleteConversation={() => setIsDeleteChatModalOpen(true)}
         />
@@ -996,6 +1047,7 @@ export default function IndividualChatPage({
                     setEditingMessage(msg);
                   }}
                   onDelete={handleDeleteMessage}
+                  onImageClick={(url, name) => setLightboxImage({ url, name })}
                 />
               );
             })
@@ -1025,7 +1077,8 @@ export default function IndividualChatPage({
         {/* Message Input Bar */}
         <MessageInput
           onSendMessage={handleSendMessage}
-          onSendAttachment={handleSendAttachment}
+          onSendFile={handleSendFile}
+          isUploadingAttachment={isUploadingAttachment}
           onTyping={handleTyping}
           replyingTo={
             replyingTo
@@ -1051,6 +1104,71 @@ export default function IndividualChatPage({
         />
       </div>
 
+      {/* Interactive Full-Screen Image Lightbox */}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setLightboxImage(null)}
+        >
+          <div
+            className="absolute top-4 right-4 flex items-center gap-3 z-10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <a
+              href={lightboxImage.url}
+              download={lightboxImage.name || "image"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2.5 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors backdrop-blur-sm cursor-pointer"
+              title="Download"
+            >
+              <Download className="w-5 h-5" />
+            </a>
+            <button
+              onClick={() => setLightboxImage(null)}
+              className="p-2.5 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors backdrop-blur-sm cursor-pointer"
+              title="Close"
+            >
+              <CloseIcon className="w-5 h-5" />
+            </button>
+          </div>
+          <div
+            className="max-w-4xl max-h-[85vh] flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={lightboxImage.url}
+              alt={lightboxImage.name || "Enlarged photo"}
+              className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl"
+            />
+          </div>
+          {lightboxImage.name && (
+            <div className="mt-3 text-white/80 text-sm font-medium">
+              {lightboxImage.name}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Group Info & Admin Settings Modal */}
+      {isGroup && conversationItem && (
+        <GroupSettingsModal
+          isOpen={isGroupSettingsOpen}
+          onClose={() => setIsGroupSettingsOpen(false)}
+          conversation={conversationItem}
+          currentUserId={currentUserId}
+          onConversationUpdated={(updated) => {
+            setConversationItem(updated);
+            setConversation((prev) => ({
+              ...prev,
+              name: updated.name || prev.name,
+              avatar: updated.avatar || undefined,
+            }));
+            fetchThreadData(true);
+          }}
+        />
+      )}
+
       {/* Clear Messages Confirmation Modal */}
       <Modal
         isOpen={isClearModalOpen}
@@ -1068,7 +1186,7 @@ export default function IndividualChatPage({
                 Clear all messages?
               </h4>
               <p className="text-xs text-[#66736D] dark:text-[#8E9C95] mt-1 leading-relaxed">
-                This will delete all messages in this conversation for you. This action cannot be undone.
+                This will delete all messages in this conversation for you and purge them from the database. This action cannot be undone.
               </p>
             </div>
           </div>
@@ -1106,7 +1224,7 @@ export default function IndividualChatPage({
                 Delete chat with {conversation.name}?
               </h4>
               <p className="text-xs text-[#66736D] dark:text-[#8E9C95] mt-1 leading-relaxed">
-                This will completely remove this conversation from your chat list and delete all media and attachments.
+                This will permanently delete all previous stored data, messages, media, and attachments for this contact so no old data ever resurfaces.
               </p>
             </div>
           </div>
