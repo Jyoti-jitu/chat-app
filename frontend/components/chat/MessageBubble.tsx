@@ -116,9 +116,18 @@ export function MessageBubble({
         {repliedMessage && (
           <div className="mb-2 p-2 rounded-xl bg-black/5 dark:bg-white/5 border-l-3 border-[#168F67] dark:border-[#22A06B] text-xs max-w-full">
             <span className="font-bold text-[10px] text-[#168F67] dark:text-[#22A06B] block mb-0.5">
-              {repliedMessage.senderId === message.senderId ? "You" : "Replied Message"}
+              {repliedMessage.senderId === message.senderId
+                ? "You"
+                : (repliedMessage.senderName || "Replied Message")}
             </span>
             <p className="truncate text-xs opacity-75">{repliedMessage.content}</p>
+          </div>
+        )}
+
+        {/* Sender name for received messages */}
+        {!isMe && message.senderName && (
+          <div className="text-[11px] font-semibold text-[#168F67] dark:text-[#22A06B] mb-0.5 select-none">
+            {message.senderName}
           </div>
         )}
 

@@ -43,6 +43,7 @@ class LastMessageInfo(BaseModel):
     """Preview of the most recent message in the thread."""
     id: Optional[str] = None
     sender_id: Optional[str] = None
+    sender_name: Optional[str] = None
     content: Optional[str] = None
     timestamp: Optional[datetime] = None
 

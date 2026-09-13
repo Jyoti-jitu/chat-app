@@ -32,6 +32,7 @@ class MessageResponse(BaseModel):
     id: str
     conversation_id: str
     sender_id: str
+    sender_name: Optional[str] = None
     content: str
     type: str = "text"
     attachment: Optional[MessageAttachment] = None

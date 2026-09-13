@@ -251,6 +251,7 @@ export default function IndividualChatPage({
           id: item.id,
           conversationId: item.conversation_id,
           senderId: item.sender_id,
+          senderName: item.sender_name || undefined,
           content: item.content,
           type: item.type as "text" | "file",
           attachment: item.attachment
@@ -363,6 +364,7 @@ export default function IndividualChatPage({
                 id: msgData.id,
                 conversationId: msgData.conversation_id,
                 senderId: msgData.sender_id,
+                senderName: msgData.sender_name || undefined,
                 content: msgData.content,
                 type: (msgData.type as "text" | "file") || "text",
                 attachment: msgData.attachment
@@ -517,6 +519,7 @@ export default function IndividualChatPage({
                 id: item.id,
                 conversationId: item.conversation_id,
                 senderId: item.sender_id,
+                senderName: item.sender_name || undefined,
                 content: item.content,
                 type: (item.type as "text" | "file") || "text",
                 attachment: item.attachment
@@ -611,6 +614,7 @@ export default function IndividualChatPage({
         id: created.id,
         conversationId: created.conversation_id,
         senderId: created.sender_id,
+        senderName: created.sender_name || undefined,
         content: created.content,
         type: "text",
         replyTo: created.reply_to || undefined,
@@ -645,6 +649,7 @@ export default function IndividualChatPage({
             id: retried.id,
             conversationId: retried.conversation_id,
             senderId: retried.sender_id,
+            senderName: retried.sender_name || undefined,
             content: retried.content,
             type: "text",
             replyTo: retried.reply_to || undefined,
@@ -735,6 +740,7 @@ export default function IndividualChatPage({
         id: created.id,
         conversationId: created.conversation_id,
         senderId: created.sender_id,
+        senderName: created.sender_name || undefined,
         content: created.content,
         type: "file",
         attachment: {
@@ -776,6 +782,7 @@ export default function IndividualChatPage({
             id: retried.id,
             conversationId: retried.conversation_id,
             senderId: retried.sender_id,
+            senderName: retried.sender_name || undefined,
             content: retried.content,
             type: "file",
             attachment: {

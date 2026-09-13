@@ -21,6 +21,7 @@ export interface ConversationMember {
 export interface LastMessagePreview {
   id?: string | null;
   sender_id?: string | null;
+  sender_name?: string | null;
   content?: string | null;
   timestamp?: string | null;
 }

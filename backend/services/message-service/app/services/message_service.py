@@ -81,6 +81,7 @@ class MessageService:
             id=str(doc.get("_id", doc.get("id"))),
             conversation_id=str(doc.get("conversation_id")),
             sender_id=str(doc.get("sender_id")),
+            sender_name=doc.get("sender_name"),
             content=doc.get("content", ""),
             type=doc.get("type", "text"),
             attachment=attachment,
@@ -125,9 +126,12 @@ class MessageService:
                 detail="Message content cannot be empty",
             )
 
+        sender_name = await self.repo.get_user_name(current_user_id) or "User"
+
         msg_data = {
             "conversation_id": str(conversation_id),
             "sender_id": str(current_user_id),
+            "sender_name": sender_name,
             "content": payload.content.strip(),
             "type": payload.type,
             "attachment": payload.attachment.model_dump() if payload.attachment else None,
@@ -150,13 +154,14 @@ class MessageService:
             {
                 "id": created["id"],
                 "sender_id": str(current_user_id),
+                "sender_name": sender_name,
                 "content": summary_content,
                 "timestamp": created["created_at"],
             },
         )
 
         logger.info(
-            f"Message [{created['id']}] sent in conversation [{conversation_id}] by {current_user_id}"
+            f"Message [{created['id']}] sent in conversation [{conversation_id}] by {current_user_id} ({sender_name})"
         )
         resp = self._to_response(created)
 
@@ -195,6 +200,30 @@ class MessageService:
             cursor_id=cursor_id,
         )
         total = await self.repo.count_messages(conversation_id)
+
+        # Backfill sender_name for legacy messages that do not have it stored in DB
+        missing_sender_ids = list({
+            str(doc["sender_id"])
+            for doc in items
+            if not doc.get("sender_name") and doc.get("sender_id")
+        })
+        if missing_sender_ids:
+            try:
+                from app.repositories.message_repository import _to_object_id
+                oids = [_to_object_id(sid) for sid in missing_sender_ids]
+                cursor_users = self.repo.users.find(
+                    {"$or": [{"_id": {"$in": oids}}, {"_id": {"$in": missing_sender_ids}}]},
+                    {"name": 1, "username": 1}
+                )
+                user_map = {}
+                async for u in cursor_users:
+                    uname = u.get("name") or u.get("username")
+                    user_map[str(u["_id"])] = uname
+                for doc in items:
+                    if not doc.get("sender_name"):
+                        doc["sender_name"] = user_map.get(str(doc.get("sender_id")), "User")
+            except Exception as err:
+                logger.warning(f"Failed to populate missing sender names: {err}")
 
         return MessageListResponse(
             items=[self._to_response(doc) for doc in items],

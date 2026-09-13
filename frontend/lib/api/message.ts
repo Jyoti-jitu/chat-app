@@ -20,6 +20,7 @@ export interface MessageItem {
   id: string;
   conversation_id: string;
   sender_id: string;
+  sender_name?: string | null;
   content: string;
   type: "text" | "image" | "file" | "audio";
   attachment?: MessageAttachmentItem | null;

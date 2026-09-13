@@ -15,6 +15,7 @@ export interface Message {
   id: string;
   conversationId: string;
   senderId: string;
+  senderName?: string;
   content: string;
   type: "text" | "image" | "file";
   createdAt: string;

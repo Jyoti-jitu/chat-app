@@ -129,13 +129,15 @@ async def test_message_lifecycle():
             msg_id = msg_data["id"]
             assert msg_data["content"] == "Hello Bob! Welcome to FluxChat."
             assert msg_data["sender_id"] == user_a_id
+            assert msg_data["sender_name"] == users_data[0]["name"]
             assert msg_data["status"] == "sent"
             assert msg_data["edited"] is False
             assert msg_data["deleted"] is False
 
-            # 6. Verify conversation's last_message is updated
+            # 6. Verify conversation's last_message is updated with content and sender_name
             conv_doc = await db.conversations.find_one({"_id": ObjectId(conv_id)})
             assert conv_doc["last_message"]["content"] == "Hello Bob! Welcome to FluxChat."
+            assert conv_doc["last_message"]["sender_name"] == users_data[0]["name"]
 
             # 7. Bob retrieves messages in conversation (200)
             list_res = await ac.get(
@@ -146,6 +148,7 @@ async def test_message_lifecycle():
             thread = list_res.json()["items"]
             assert len(thread) == 1
             assert thread[0]["id"] == msg_id
+            assert thread[0]["sender_name"] == users_data[0]["name"]
 
             # 8. Bob cannot edit Alice's message (403)
             bad_edit = await ac.patch(

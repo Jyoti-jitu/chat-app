@@ -38,6 +38,26 @@ class MessageRepository:
         db = db_manager.get_database()
         return db["conversations"]
 
+    @property
+    def users(self):
+        """Returns the users collection for resolving sender details."""
+        db = db_manager.get_database()
+        return db["users"]
+
+    async def get_user_name(self, user_id: str) -> Optional[str]:
+        """Fetches a user's display name or username by string or ObjectId."""
+        try:
+            oid = _to_object_id(user_id)
+            user = await self.users.find_one(
+                {"$or": [{"_id": oid}, {"_id": str(user_id)}]},
+                {"name": 1, "username": 1}
+            )
+            if user:
+                return user.get("name") or user.get("username")
+        except Exception:
+            pass
+        return None
+
     async def get_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
         """Fetches a conversation by string or ObjectId."""
         oid = _to_object_id(conversation_id)

@@ -82,6 +82,7 @@ class ConversationService:
             last_msg = LastMessageInfo(
                 id=last_msg_doc.get("id"),
                 sender_id=last_msg_doc.get("sender_id"),
+                sender_name=last_msg_doc.get("sender_name"),
                 content=last_msg_doc.get("content"),
                 timestamp=last_msg_doc.get("timestamp"),
             )
