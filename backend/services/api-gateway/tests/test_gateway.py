@@ -148,7 +148,7 @@ def test_proxy_notification_service():
 
 
 def test_gateway_liveness_and_readiness_probes():
-    """Tests Phase 29 Kubernetes liveness and readiness probes on API Gateway."""
+    """Tests service liveness and readiness health probes on API Gateway."""
     with TestClient(app) as client:
         # Root probes
         live_resp = client.get("/health/live")

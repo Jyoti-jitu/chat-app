@@ -223,7 +223,7 @@ FluxChat is built on an enterprise-grade, distributed microservices architecture
 | `security/rate_limit.py` | Sliding-window rate limiting dependency for protecting sensitive endpoints (login, register, send-otp). |
 | `errors/exceptions.py` | Custom domain exceptions (`EntityNotFoundError`, `AuthenticationError`, `ConflictError`). |
 | `errors/handlers.py` | Central exception handlers transforming unhandled errors into standardized RFC 7807 JSON error responses. |
-| `health/probes.py` | Reusable health probe factory providing `/health`, `/health/live`, and `/health/ready` routes for Kubernetes and cloud platforms. |
+| `health/probes.py` | Reusable health probe factory providing `/health`, `/health/live`, and `/health/ready` routes for cloud platforms, Render, and container environments. |
 | `config/validator.py` | 12-factor configuration auditor verifying database URIs, JWT entropy, and environment flags. |
 | `shared/requirements.txt` | Core shared dependencies (`motor`, `fastapi`, `pydantic-settings`, `pyjwt`, `bcrypt`, `certifi`). |
 
@@ -319,18 +319,15 @@ FluxChat is built on an enterprise-grade, distributed microservices architecture
 
 ---
 
-### O. Cloud & Kubernetes Infrastructure (`k8s/`)
+### O. Cloud & Production Deployment (`render.yaml`, Docker & Vercel)
 
 | File Path | Why It Was Created & What It Does |
 |---|---|
-| `k8s/namespace.yaml` | Declares isolated `fluxchat` namespace in the Kubernetes cluster. |
-| `k8s/configmap.yaml` | Non-sensitive environment configuration shared across Kubernetes pods. |
-| `k8s/secrets.yaml` | Base64-encoded Kubernetes secrets storing `MONGODB_URL` and `JWT_SECRET`. |
-| `k8s/ingress.yaml` | Ingress controller routing external traffic to API Gateway and Next.js frontend pods. |
-| `k8s/hpa.yaml` | Horizontal Pod Autoscaler automatically scaling service pods based on CPU and memory utilization. |
-| `k8s/backend/*.yaml` | Kubernetes Deployment and Service definitions for each of the 7 microservices. |
-| `k8s/frontend/frontend.yaml`| Kubernetes Deployment and Service definition for the Next.js frontend web app. |
-| `k8s/redis/*.yaml` | Kubernetes Redis Deployment and Service for distributed pub/sub. |
+| `render.yaml` | Infrastructure as Code blueprint for Render.com deploying the full backend cluster and managed Redis instance with environment variables, health checks, and autoscaling. |
+| `backend/Dockerfile.render` | Production multi-stage Docker build packaging Python 3.12, system dependencies, all 7 microservices, and supervisor orchestration. |
+| `backend/scripts/start_render.sh` | Production entrypoint script verifying Redis/MongoDB connectivity, launching background microservices, and running the public API Gateway on port 8000. |
+| `frontend/vercel.json` | Edge routing, security headers (CSP, HSTS), and static caching policy for Next.js frontend deployment on Vercel. |
+| `docker-compose.yml` | Full-stack local development orchestration powering all 7 microservices, Redis, MongoDB Atlas, and Next.js frontend concurrently. |
 
 ---
 

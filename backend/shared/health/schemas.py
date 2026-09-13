@@ -1,5 +1,5 @@
 """
-Standardized Health Probe Schemas for Kubernetes & Cloud Ingress.
+Standardized Health Probe Schemas for Cloud & Container Deployment.
 Defines contracts for Liveness (/health/live) and Readiness (/health/ready).
 """
 from typing import Optional, Dict, Any
@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 class LivenessResponse(BaseModel):
     """
-    Contract for Kubernetes Liveness Probe.
+    Contract for Service Liveness Probe.
     Indicates whether the process is alive, the event loop is ticking,
     and the application is responsive to HTTP requests.
     Does NOT query external dependencies to avoid cascading restarts.
@@ -26,7 +26,7 @@ class LivenessResponse(BaseModel):
 
 class ReadinessResponse(BaseModel):
     """
-    Contract for Kubernetes Readiness Probe.
+    Contract for Service Readiness Probe.
     Indicates whether the service is ready to accept user and proxy traffic.
     Validates connectivity to critical dependencies (MongoDB Atlas, Redis).
     Returns 200 OK when ready, 503 Service Unavailable when unready.

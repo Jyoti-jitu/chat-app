@@ -1,8 +1,0 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: fluxchat
-  labels:
-    app.kubernetes.io/name: fluxchat
-    app.kubernetes.io/part-of: fluxchat-platform
-    environment: production

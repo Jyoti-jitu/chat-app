@@ -1,5 +1,5 @@
 """
-Unit tests for shared Kubernetes health probes (Liveness & Readiness).
+Unit tests for shared service health probes (Liveness & Readiness).
 """
 import pytest
 from fastapi import FastAPI, status

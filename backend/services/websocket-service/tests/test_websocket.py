@@ -53,7 +53,7 @@ async def test_health_endpoints():
         assert "active_connections" in data
         assert "active_users" in data
 
-        # Kubernetes Probes
+        # Service Health Probes
         live = await ac.get("/health/live")
         assert live.status_code == 200
         assert live.json()["status"] == "ok"

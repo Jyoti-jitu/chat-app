@@ -17,7 +17,7 @@ router = APIRouter(tags=["Health"])
     "/health/live",
     response_model=LivenessResponse,
     status_code=status.HTTP_200_OK,
-    summary="Kubernetes Liveness Probe",
+    summary="Service Liveness Probe",
     description="Validates that the WebSocket process is running and the event loop is responsive.",
 )
 async def liveness_probe() -> LivenessResponse:
@@ -35,7 +35,7 @@ async def liveness_probe() -> LivenessResponse:
         200: {"description": "Service is ready to accept WebSocket and HTTP connections"},
         503: {"description": "MongoDB or Redis backing service unavailable"},
     },
-    summary="Kubernetes Readiness Probe",
+    summary="Service Readiness Probe",
     description="Validates MongoDB and Redis Pub/Sub connectivity before routing traffic.",
 )
 async def readiness_probe(response: Response) -> ReadinessResponse:

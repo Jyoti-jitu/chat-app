@@ -1,5 +1,5 @@
 """
-Reusable Kubernetes Health Probes Infrastructure for FluxChat Microservices.
+Reusable Health Probes Infrastructure for FluxChat Microservices.
 Provides standardized liveness and readiness endpoints with accurate HTTP status codes.
 """
 import time
@@ -26,8 +26,8 @@ def create_health_probe_router(
 ) -> APIRouter:
     """
     Creates a standardized FastAPI router containing:
-      - GET /live: Kubernetes Liveness Probe (always 200 OK if event loop is alive)
-      - GET /ready: Kubernetes Readiness Probe (200 OK when ready, 503 when dependencies fail)
+      - GET /live: Service Liveness Probe (always 200 OK if event loop is alive)
+      - GET /ready: Service Readiness Probe (200 OK when ready, 503 when dependencies fail)
     """
     router = APIRouter(tags=tags or ["Health"])
 
@@ -35,7 +35,7 @@ def create_health_probe_router(
         "/live",
         response_model=LivenessResponse,
         status_code=status.HTTP_200_OK,
-        summary="Kubernetes Liveness Probe",
+        summary="Service Liveness Probe",
         description="Verifies the process is alive and responding. Never queries downstream databases to avoid cascading restarts.",
     )
     async def liveness_probe() -> LivenessResponse:
@@ -53,7 +53,7 @@ def create_health_probe_router(
             200: {"description": "Service is ready to accept traffic"},
             503: {"description": "One or more critical dependencies are unavailable"},
         },
-        summary="Kubernetes Readiness Probe",
+        summary="Service Readiness Probe",
         description="Verifies all required backing services (e.g. MongoDB, Redis) are healthy before routing traffic.",
     )
     async def readiness_probe(response: Response) -> ReadinessResponse:

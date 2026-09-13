@@ -686,16 +686,17 @@ This document serves as the master engineering blueprint and step-by-step implem
 
 ---
 
-### Phase 29 — Production Architecture & Scaling
+### Production Architecture & Cloud Deployment
 - **Status**: ✅ **COMPLETED & VERIFIED**
 - **Deliverables**:
-  - **Kubernetes Architecture ([`k8s/`](file:///Users/apple/Desktop/project/chat-app/k8s/))**: Declarative manifests for namespace, ConfigMap, Secrets, Redis, Ingress, Horizontal Pod Autoscalers (HPA v2), and Pod Disruption Budgets (PDB).
+  - **Render Cloud Architecture ([`render.yaml`](file:///Users/apple/Desktop/project/chat-app/render.yaml))**: Declarative Infrastructure-as-Code blueprint for Render Web Service, Redis instance, automatic builds, and environment variables.
+  - **Containerization ([`backend/Dockerfile.render`](file:///Users/apple/Desktop/project/chat-app/backend/Dockerfile.render))**: Production multi-stage Docker build packaging all 7 microservices and API Gateway supervisor.
   - **Standardized Health Probes ([`backend/shared/health/`](file:///Users/apple/Desktop/project/chat-app/backend/shared/health/))**:
     - Liveness Probe (`/health/live`): Process liveness, event loop responsiveness, zero database queries to prevent cascading restarts.
     - Readiness Probe (`/health/ready`): Dependency verification (MongoDB Atlas & Redis ping), returns HTTP 200 OK when ready, HTTP 503 Service Unavailable when backing stores are down.
     - Mounted and verified across all 7 backend services + API Gateway rate-limit bypass.
-  - **Zero-Downtime Rolling Update Strategy**: `maxSurge: 25%`, `maxUnavailable: 0`, and `terminationGracePeriodSeconds` (30s/60s).
-  - **Production Scaling Runbook**: [`docs/PRODUCTION_SCALING.md`](file:///Users/apple/Desktop/project/chat-app/docs/PRODUCTION_SCALING.md).
+  - **Zero-Downtime Rolling Update Strategy**: Fast graceful shutdown (`SIGTERM`/`SIGINT`), connection draining, and Render health-check gating.
+  - **Deployment Guide**: [`docs/DEPLOYMENT_VERCEL_RENDER.md`](file:///Users/apple/Desktop/project/chat-app/docs/DEPLOYMENT_VERCEL_RENDER.md).
 
 ---
 
@@ -767,7 +768,7 @@ This document serves as the master engineering blueprint and step-by-step implem
 - **Phase 26 (Docker Containerization & Compose Orchestration)**: ✅ **Completed & Verified** (Multi-stage Dockerfiles for all 7 microservices, Redis, Next.js standalone frontend, compose orchestration).
 - **Phase 27 (Environment Configuration & 12-Factor Compliance)**: ✅ **Completed & Verified** (Root & service `.env.example` templates, `validator.py`, `verify_env.py` diagnostic tool, production checklist).
 - **Phase 28 (OpenAPI & API Documentation)**: ✅ **Completed & Verified** (Multi-spec Swagger portal at `:8000/docs`, ReDoc, `export_openapi.py` with 62 endpoints, `API_DOCUMENTATION.md`).
-- **Phase 29 (Production Architecture & Scaling)**: ✅ **Completed & Verified** (Kubernetes manifests in `k8s/`, `/health/live` & `/health/ready` probes, HPA, PDB, zero-downtime runbook).
+- **Production Architecture & Cloud Deployment**: ✅ **Completed & Verified** (Render blueprint `render.yaml`, `Dockerfile.render`, `/health/live` & `/health/ready` probes, zero-downtime rolling deploys).
 - **Phase 30 (Metrics, Monitoring & Observability)**: ⏳ **Next in Queue**
 
 

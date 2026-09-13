@@ -49,7 +49,7 @@ async def check_service(name: str, url: str) -> Dict[str, Any]:
 
 @router.get("/health/live", summary="Gateway Liveness Probe", tags=["Health"])
 async def gateway_liveness():
-    """Kubernetes liveness probe for API Gateway."""
+    """Service liveness probe for API Gateway."""
     return {
         "status": "ok",
         "service": settings.SERVICE_NAME,
@@ -60,7 +60,7 @@ async def gateway_liveness():
 
 @router.get("/health/ready", summary="Gateway Readiness Probe", tags=["Health"])
 async def gateway_readiness():
-    """Kubernetes readiness probe for API Gateway."""
+    """Service readiness probe for API Gateway."""
     return {
         "status": "ok",
         "service": settings.SERVICE_NAME,
