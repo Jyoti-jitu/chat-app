@@ -19,6 +19,15 @@ export function ConversationItem({
   return (
     <Link
       href={`/app/chats/${conversation.id}`}
+      onClick={() => {
+        setTimeout(() => {
+          const textarea = document.getElementById("chat-message-input") as HTMLTextAreaElement | null;
+          if (textarea) {
+            textarea.focus();
+            if (textarea.value) textarea.select();
+          }
+        }, 50);
+      }}
       className={cn(
         "flex items-center gap-3 p-3 rounded-2xl transition-all cursor-pointer group select-none",
         isActive

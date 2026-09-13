@@ -329,6 +329,13 @@ export function ConversationList({ activeId, className }: ConversationListProps)
         setIsNewChatModalOpen(false);
         await fetchConversations();
         router.push(`/app/chats/${conv.id}`);
+        setTimeout(() => {
+          const textarea = document.getElementById("chat-message-input") as HTMLTextAreaElement | null;
+          if (textarea) {
+            textarea.focus();
+            if (textarea.value) textarea.select();
+          }
+        }, 100);
       } catch (err: any) {
         alert(err.message || "Failed to start direct conversation");
       } finally {
@@ -337,6 +344,13 @@ export function ConversationList({ activeId, className }: ConversationListProps)
     } else {
       setIsNewChatModalOpen(false);
       router.push("/app/chats/c1");
+      setTimeout(() => {
+        const textarea = document.getElementById("chat-message-input") as HTMLTextAreaElement | null;
+        if (textarea) {
+          textarea.focus();
+          if (textarea.value) textarea.select();
+        }
+      }, 100);
     }
   };
 

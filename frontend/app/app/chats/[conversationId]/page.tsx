@@ -127,6 +127,20 @@ export default function IndividualChatPage({
   const isAtBottomRef = useRef(true);
   const prevMessagesLengthRef = useRef(0);
 
+  // Auto-focus and select message text area whenever conversation opens or changes
+  useEffect(() => {
+    const focusTimer = setTimeout(() => {
+      const textarea = document.getElementById("chat-message-input") as HTMLTextAreaElement | null;
+      if (textarea) {
+        textarea.focus();
+        if (textarea.value) {
+          textarea.select();
+        }
+      }
+    }, 75);
+    return () => clearTimeout(focusTimer);
+  }, [conversationId]);
+
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToastMessage(msg);
     setToastType(type);
@@ -1076,6 +1090,8 @@ export default function IndividualChatPage({
 
         {/* Message Input Bar */}
         <MessageInput
+          key={conversationId}
+          conversationId={conversationId}
           onSendMessage={handleSendMessage}
           onSendFile={handleSendFile}
           isUploadingAttachment={isUploadingAttachment}

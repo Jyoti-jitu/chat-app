@@ -5,6 +5,8 @@ import { Plus, Smile, Mic, Send, X, Edit3, Reply, Loader2, Image as ImageIcon, P
 import { cn } from "@/lib/utils/cn";
 
 export interface MessageInputProps {
+  conversationId?: string;
+  autoFocus?: boolean;
   onSendMessage: (content: string, replyToId?: string) => Promise<void> | void;
   onSendAttachment?: (file: { name: string; size: string; type: "file" }) => void;
   onSendFile?: (file: File) => Promise<void> | void;
@@ -19,6 +21,8 @@ export interface MessageInputProps {
 }
 
 export function MessageInput({
+  conversationId,
+  autoFocus = true,
   onSendMessage,
   onSendAttachment,
   onSendFile,
@@ -34,28 +38,55 @@ export function MessageInput({
   const [content, setContent] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const sampleEmojis = ["🙂", "❤️", "👍", "🚀", "🎉", "🔥", "✨", "👏", "🙌", "😍", "🥳", "💯"];
+
+  // Auto-focus and select text area whenever component mounts or conversation changes
+  useEffect(() => {
+    if (disabled || isSending || !autoFocus) return;
+
+    const timer = setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        if (textareaRef.current.value) {
+          textareaRef.current.select();
+        }
+      }
+    }, 60);
+
+    return () => clearTimeout(timer);
+  }, [conversationId, disabled, isSending, autoFocus]);
 
   // Populate input when entering edit mode
   useEffect(() => {
     if (editingMessage) {
       setContent(editingMessage.content);
-      inputRef.current?.focus();
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          textareaRef.current.select();
+        }
+      }, 50);
     }
   }, [editingMessage]);
 
   // Focus input when replying
   useEffect(() => {
     if (replyingTo) {
-      inputRef.current?.focus();
+      textareaRef.current?.focus();
     }
   }, [replyingTo]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setContent(e.target.value);
+
+    // Auto-adjust textarea height dynamically up to 120px
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
 
     // Emit typing indicator
     if (onTyping) {
@@ -67,8 +98,15 @@ export function MessageInput({
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!content.trim() || isSending || disabled) return;
 
     try {
@@ -81,6 +119,10 @@ export function MessageInput({
         await onSendMessage(content.trim(), replyingTo ? replyingTo.id : undefined);
       }
       setContent("");
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        textareaRef.current.focus();
+      }
       setShowEmojiPicker(false);
     } finally {
       setIsSending(false);
@@ -88,8 +130,15 @@ export function MessageInput({
   };
 
   const handleAddEmoji = (emoji: string) => {
-    setContent((prev) => prev + emoji);
-    inputRef.current?.focus();
+    setContent((prev) => {
+      const updated = prev + emoji;
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+      }
+      return updated;
+    });
+    textareaRef.current?.focus();
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -226,19 +275,21 @@ export function MessageInput({
             <Paperclip className="w-4 h-4" />
           </button>
 
-          {/* Input box */}
-          <div className="flex-1 relative flex items-center">
-            <input
-              ref={inputRef}
-              type="text"
+          {/* Input box / Textarea */}
+          <div className="flex-1 relative flex items-center min-h-[44px]">
+            <textarea
+              id="chat-message-input"
+              ref={textareaRef}
+              rows={1}
               placeholder={editingMessage ? "Update message..." : "Type a message..."}
               value={content}
               onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
               disabled={disabled || isSending}
               className={cn(
                 "w-full rounded-2xl bg-[#F4F6F5] dark:bg-[#1D2723] border border-transparent px-4 py-2.5 text-sm text-[#17211D] dark:text-[#F1F5F3] placeholder:text-[#9BA7A1] dark:placeholder:text-[#66736D]",
                 "focus:outline-none focus:bg-white dark:focus:bg-[#151D1A] focus:border-[#168F67]/50 focus:ring-2 focus:ring-[#168F67]/15",
-                "transition-all duration-150 pr-20 disabled:opacity-60"
+                "transition-all duration-150 pr-20 disabled:opacity-60 resize-none leading-relaxed overflow-y-auto max-h-32 min-h-[42px]"
               )}
             />
 
