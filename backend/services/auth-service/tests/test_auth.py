@@ -76,10 +76,12 @@ async def test_auth_full_lifecycle():
     try:
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             # 1. Register new user
+            phone = f"+9198{str(test_suffix)[-8:]}"
             reg_payload = {
                 "name": "Test User",
                 "username": username,
                 "email": email,
+                "phone": phone,
                 "password": password,
             }
             reg_resp = await ac.post("/auth/register", json=reg_payload)
@@ -109,6 +111,24 @@ async def test_auth_full_lifecycle():
                 "/auth/login", json={"username": username, "password": password}
             )
             assert login_user_resp.status_code == 200
+
+            # 4b. Login with mobile number (+91... format)
+            login_phone_resp = await ac.post(
+                "/auth/login", json={"phone": phone, "password": password}
+            )
+            assert login_phone_resp.status_code == 200
+
+            # 4c. Login with mobile number in username field
+            login_phone_user_resp = await ac.post(
+                "/auth/login", json={"username": phone, "password": password}
+            )
+            assert login_phone_user_resp.status_code == 200
+
+            # 4d. Login with 10-digit mobile number without +91
+            login_phone_10_resp = await ac.post(
+                "/auth/login", json={"phone": phone[3:], "password": password}
+            )
+            assert login_phone_10_resp.status_code == 200
 
             # 5. Login with invalid password fails (401)
             bad_login = await ac.post(

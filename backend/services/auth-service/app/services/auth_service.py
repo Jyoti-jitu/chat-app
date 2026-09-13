@@ -173,21 +173,21 @@ class AuthService:
 
     async def login(self, request: UserLoginRequest) -> TokenResponse:
         """
-        Authenticates a user with email/username and password.
+        Authenticates a user with mobile number, username, or email, and password.
         Returns JWT access and refresh token pair upon successful verification.
         """
-        identifier = request.email or request.username
+        identifier = request.phone or request.username or request.email
         if not identifier:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Either email or username must be provided.",
+                detail="Mobile number, username, or email must be provided.",
             )
 
         user = await self.repository.get_by_email_or_username(str(identifier))
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials. Please verify your email/username and password.",
+                detail="Invalid credentials. Please verify your mobile number/username and password.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 

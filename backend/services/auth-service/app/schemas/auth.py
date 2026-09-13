@@ -82,7 +82,8 @@ class LoginOtpRequest(BaseModel):
 class UserLoginRequest(BaseModel):
     """Payload for user authentication."""
     email: Optional[EmailStr] = Field(None, description="Registered email address")
-    username: Optional[str] = Field(None, description="Registered username")
+    username: Optional[str] = Field(None, description="Registered username or mobile number")
+    phone: Optional[str] = Field(None, description="Registered mobile number")
     password: str = Field(..., min_length=1, description="Account password")
 
 

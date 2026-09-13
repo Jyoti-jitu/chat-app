@@ -118,8 +118,8 @@ export default function LoginPage() {
     const formattedPhone = `${selectedCountry.dialCode}${withoutLeadingZero}`;
 
     if (authMethod === "password") {
-      if (!phoneNumber.trim()) {
-        setErrorNotice("Please enter your phone number, username, or email");
+      if (!cleanDigits || cleanDigits.length < 10) {
+        setErrorNotice("Please enter a valid 10-digit mobile number");
         return;
       }
       if (!password.trim()) {
@@ -153,11 +153,13 @@ export default function LoginPage() {
           }),
         });
       } else {
+        const loginPhone = cleanDigits.length >= 10 ? formattedPhone : phoneNumber.trim();
         res = await fetch(`${API_BASE_URL}/auth/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            username: phoneNumber.trim(),
+            phone: loginPhone,
+            username: loginPhone,
             password: password,
           }),
         });
@@ -223,7 +225,7 @@ export default function LoginPage() {
               Welcome back
             </h1>
             <p className="text-xs text-[#66736D] dark:text-[#8E9C95] mt-1.5">
-              Sign in to continue your conversations
+              Enter your mobile number and password to sign in
             </p>
           </div>
 
@@ -257,7 +259,7 @@ export default function LoginPage() {
             {/* Phone Number Input with India (+91) Default and Country Selector */}
             <PhoneInput
               id="phone"
-              label="Phone Number"
+              label="Mobile Number"
               value={phoneNumber}
               onChange={setPhoneNumber}
               selectedCountry={selectedCountry}

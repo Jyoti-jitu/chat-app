@@ -44,14 +44,26 @@ class AuthRepository:
         return await self.users_collection.find_one({"username": username.strip().lower()})
 
     async def get_by_email_or_username(self, identifier: str) -> Optional[Dict[str, Any]]:
-        """Retrieves a user document matching either email or username."""
+        """Retrieves a user document matching phone, email, or username."""
         clean = identifier.strip().lower()
-        return await self.users_collection.find_one({
-            "$or": [
-                {"email": clean},
-                {"username": clean},
-            ]
-        })
+        raw = identifier.strip()
+        digits = "".join(filter(str.isdigit, raw))
+
+        queries = [
+            {"email": clean},
+            {"username": clean},
+            {"phone": raw},
+        ]
+        if digits:
+            queries.append({"phone": digits})
+            queries.append({"phone": f"+{digits}"})
+            if len(digits) == 10:
+                queries.append({"phone": f"+91{digits}"})
+            elif len(digits) == 12 and digits.startswith("91"):
+                queries.append({"phone": f"+{digits}"})
+                queries.append({"phone": digits[2:]})
+
+        return await self.users_collection.find_one({"$or": queries})
 
     async def get_by_phone(self, phone: str) -> Optional[Dict[str, Any]]:
         """Retrieves a user document by normalized phone number."""
