@@ -5,6 +5,7 @@ FluxChat is a full-featured, responsive, and beautifully designed modern messagi
 > 📖 **Core Documentation for Presentation & Evaluation:**
 > - [PROJECT_IDEA_AND_HLD.md](PROJECT_IDEA_AND_HLD.md) — **Project Idea & High-Level Design (HLD)**: Problem statement, microservices decomposition, system architecture diagrams, and tradeoffs.
 > - [PROJECT_LLD.md](PROJECT_LLD.md) — **Low-Level Design (LLD)**: Three-tier layering, MongoDB BSON schemas, API endpoint catalog, WebSocket protocols, and caching policies.
+> - [backend/BACKEND_FILE_AND_FOLDER_USAGE.md](backend/BACKEND_FILE_AND_FOLDER_USAGE.md) — **Backend File & Folder Architecture Guide**: Exhaustive breakdown of all backend services, shared packages, runner scripts, and why each file is required.
 > - [RUNNING.md](RUNNING.md) — Step-by-step startup guide, local execution, and health probes.
 > - [DEPLOYMENT.md](DEPLOYMENT.md) — Production deployment guide for Vercel (Frontend) & Render (Backend).
 

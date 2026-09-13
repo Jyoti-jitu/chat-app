@@ -4,6 +4,11 @@ FluxChat Backend is a production-grade, modular microservices ecosystem engineer
 
 This document serves as the master engineering blueprint and step-by-step implementation guide for all **29 Phases** of the backend architecture.
 
+> 📖 **Backend Architectural Reference & File Guide:**
+> - [BACKEND_FILE_AND_FOLDER_USAGE.md](BACKEND_FILE_AND_FOLDER_USAGE.md) — Complete breakdown of all files, folders, runner scripts, and why each is required.
+> - [PROJECT_IDEA_AND_HLD.md](../PROJECT_IDEA_AND_HLD.md) — High-Level Design, problem statement, microservices topology, and architecture decisions.
+> - [PROJECT_LLD.md](../PROJECT_LLD.md) — Low-Level Design, MongoDB BSON schemas, API contracts, and WebSocket protocols.
+
 ---
 
 ## 🏛️ Overall System Architecture
@@ -669,7 +674,7 @@ This document serves as the master engineering blueprint and step-by-step implem
   - **Sanitized Service Templates**: Sanitized all `.env.example` files across services (`auth`, `user`, `chat`, `message`, `websocket`, `notification`, `gateway`) with placeholders and zero leaked credentials.
   - **Reusable 12-Factor Validator**: [`shared/config/validator.py`](file:///Users/apple/Desktop/project/chat-app/backend/shared/config/validator.py) enforcing scheme validation (`mongodb://`, `redis://`), secret entropy (>= 32 chars), and production rejection of default development keys.
   - **Diagnostic CLI Tool**: [`backend/verify_env.py`](file:///Users/apple/Desktop/project/chat-app/backend/verify_env.py) auditing all `.env` files in the cluster.
-  - **Production Readiness Guide**: [`RUNNING.md`](file:///Users/apple/Desktop/project/chat-app/RUNNING.md) and [`FEATURES_AND_SYSTEM_DOCUMENTATION.md`](file:///Users/apple/Desktop/project/chat-app/FEATURES_AND_SYSTEM_DOCUMENTATION.md).
+  - **Production Readiness Guide**: [`RUNNING.md`](file:///Users/apple/Desktop/project/chat-app/RUNNING.md) and [`PROJECT_LLD.md`](file:///Users/apple/Desktop/project/chat-app/PROJECT_LLD.md).
 
 ---
 
@@ -682,7 +687,7 @@ This document serves as the master engineering blueprint and step-by-step implem
   - **ReDoc Technical Reference (`/redoc`)**: Standard ReDoc viewer deployed across all services.
   - **Live Dynamic Schemas**: Dynamic `/openapi.json` served across all 7 microservices.
   - **Standardized Error Responses**: RFC-compliant error JSON envelopes (`ErrorResponse`) documented across all status codes.
-  - **Comprehensive Master Documentation**: [`FEATURES_AND_SYSTEM_DOCUMENTATION.md`](file:///Users/apple/Desktop/project/chat-app/FEATURES_AND_SYSTEM_DOCUMENTATION.md).
+  - **Comprehensive Master Documentation**: [`PROJECT_LLD.md`](file:///Users/apple/Desktop/project/chat-app/PROJECT_LLD.md) and [`BACKEND_FILE_AND_FOLDER_USAGE.md`](file:///Users/apple/Desktop/project/chat-app/backend/BACKEND_FILE_AND_FOLDER_USAGE.md).
 
 ---
 
@@ -767,7 +772,7 @@ This document serves as the master engineering blueprint and step-by-step implem
 - **Phase 25 (Automated Test Suite & E2E Test Harness)**: ✅ **Completed & Verified** (Master test runner `run_all_tests.sh`, 56/56 tests passing in 95s, CI/CD pipeline).
 - **Phase 26 (Docker Containerization & Compose Orchestration)**: ✅ **Completed & Verified** (Multi-stage Dockerfiles for all 7 microservices, Redis, Next.js standalone frontend, compose orchestration).
 - **Phase 27 (Environment Configuration & 12-Factor Compliance)**: ✅ **Completed & Verified** (Root & service `.env.example` templates, `validator.py`, `verify_env.py` diagnostic tool, production checklist).
-- **OpenAPI & API Documentation**: ✅ **Completed & Verified** (Multi-spec Swagger portal at `:8000/docs`, ReDoc, live dynamic specs, `FEATURES_AND_SYSTEM_DOCUMENTATION.md`).
+- **OpenAPI & API Documentation**: ✅ **Completed & Verified** (Multi-spec Swagger portal at `:8000/docs`, ReDoc, live dynamic specs, `PROJECT_LLD.md`).
 - **Production Architecture & Cloud Deployment**: ✅ **Completed & Verified** (Render blueprint `render.yaml`, `Dockerfile.render`, `/health/live` & `/health/ready` probes, zero-downtime rolling deploys).
 - **Phase 30 (Metrics, Monitoring & Observability)**: ⏳ **Next in Queue**
 
