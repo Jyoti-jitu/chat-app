@@ -82,6 +82,7 @@ export default function IndividualChatPage({
   });
 
   const conversationRef = useRef(conversation);
+  const otherUserIdRef = useRef<string | null>(null);
   useEffect(() => {
     conversationRef.current = conversation;
   }, [conversation]);
@@ -139,6 +140,7 @@ export default function IndividualChatPage({
     if (conversationId.startsWith("c_")) {
       const recipientId = conversationId.replace(/^c_/, "");
       otherUserId = recipientId;
+      otherUserIdRef.current = recipientId;
       try {
         const directConv = await createOrGetDirectConversation(recipientId, token);
         targetId = directConv.id;
@@ -172,7 +174,10 @@ export default function IndividualChatPage({
         const convDetails = await getConversationDetails(conversationId, token);
         if (convDetails.type === "direct") {
           const other = convDetails.members.find((m) => m.id !== myUserId);
-          if (other) otherUserId = other.id;
+          if (other) {
+            otherUserId = other.id;
+            otherUserIdRef.current = other.id;
+          }
         }
         setConversation({
           id: convDetails.id,
@@ -287,10 +292,11 @@ export default function IndividualChatPage({
 
         const activeChatId = conversationRef.current.id;
         const recipientId = conversationId.startsWith("c_") ? conversationId.replace(/^c_/, "") : null;
+        const currentOtherId = otherUserIdRef.current || recipientId;
         const matchesThread =
           msgData.conversation_id === conversationId ||
           msgData.conversation_id === activeChatId ||
-          (recipientId && (msgData.sender_id === recipientId || msgData.recipient_id === recipientId));
+          (currentOtherId && (msgData.sender_id === currentOtherId || msgData.recipient_id === currentOtherId));
 
         if (matchesThread) {
           setMessages((prev) => {
@@ -496,6 +502,38 @@ export default function IndividualChatPage({
       };
       setMessages((prev) => [...prev, newMsg]);
     } catch (err: any) {
+      const errMsg = err?.message?.toLowerCase() || "";
+      if ((errMsg.includes("404") || errMsg.includes("not found")) && otherUserIdRef.current) {
+        try {
+          const directConv = await createOrGetDirectConversation(otherUserIdRef.current, token);
+          setConversation((prev) => ({ ...prev, id: directConv.id }));
+          router.replace(`/app/chats/${directConv.id}`);
+          const retried = await sendMessage(
+            directConv.id,
+            { content: content.trim(), type: "text" },
+            token
+          );
+          const newMsg: Message = {
+            id: retried.id,
+            conversationId: retried.conversation_id,
+            senderId: retried.sender_id,
+            content: retried.content,
+            type: "text",
+            createdAt: retried.created_at
+              ? new Date(retried.created_at).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "Now",
+            status: retried.status,
+          };
+          setMessages((prev) => [...prev, newMsg]);
+          return;
+        } catch (retryErr: any) {
+          showToast(retryErr.message || "Failed to send message", "error");
+          return;
+        }
+      }
       showToast(err.message || "Failed to send message", "error");
     }
   };
@@ -557,6 +595,52 @@ export default function IndividualChatPage({
       };
       setMessages((prev) => [...prev, newMsg]);
     } catch (err: any) {
+      const errMsg = err?.message?.toLowerCase() || "";
+      if ((errMsg.includes("404") || errMsg.includes("not found")) && otherUserIdRef.current) {
+        try {
+          const directConv = await createOrGetDirectConversation(otherUserIdRef.current, token);
+          setConversation((prev) => ({ ...prev, id: directConv.id }));
+          router.replace(`/app/chats/${directConv.id}`);
+          const retried = await sendMessage(
+            directConv.id,
+            {
+              content: file.name,
+              type: "file",
+              attachment: {
+                name: file.name,
+                size: file.size,
+                url: "#",
+                type: "file",
+              },
+            },
+            token
+          );
+          const newMsg: Message = {
+            id: retried.id,
+            conversationId: retried.conversation_id,
+            senderId: retried.sender_id,
+            content: retried.content,
+            type: "file",
+            attachment: {
+              name: file.name,
+              size: file.size,
+              type: "file",
+            },
+            createdAt: retried.created_at
+              ? new Date(retried.created_at).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "Now",
+            status: retried.status,
+          };
+          setMessages((prev) => [...prev, newMsg]);
+          return;
+        } catch (retryErr: any) {
+          showToast(retryErr.message || "Failed to upload file", "error");
+          return;
+        }
+      }
       showToast(err.message || "Failed to upload file", "error");
     }
   };

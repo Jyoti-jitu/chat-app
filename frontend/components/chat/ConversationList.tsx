@@ -218,9 +218,12 @@ export function ConversationList({ activeId, className }: ConversationListProps)
             conv.unreadCount = (conv.unreadCount || 0) + 1;
           }
           updated.splice(existingIdx, 1);
+          if (conv.section && msgData.sender_id !== currentUserId) {
+            setActiveSection(conv.section);
+          }
           return [conv, ...updated];
         } else {
-          fetchConversations(true);
+          fetchConversations(false);
           return prev;
         }
       });

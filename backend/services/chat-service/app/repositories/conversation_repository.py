@@ -72,8 +72,15 @@ class ConversationRepository:
         self, user_id: str, limit: int = 50, skip: int = 0
     ) -> List[Dict[str, Any]]:
         """Lists all conversations the user is a member of, sorted by recency."""
+        query = {
+            "members": user_id,
+            "$or": [
+                {"cleared_by": {"$ne": user_id}},
+                {"last_message": {"$ne": None}},
+            ],
+        }
         cursor = (
-            self.conversations.find({"members": user_id})
+            self.conversations.find(query)
             .sort("updated_at", -1)
             .skip(skip)
             .limit(limit)
@@ -85,7 +92,14 @@ class ConversationRepository:
 
     async def count_user_conversations(self, user_id: str) -> int:
         """Returns the total number of conversations for the user."""
-        return await self.conversations.count_documents({"members": user_id})
+        query = {
+            "members": user_id,
+            "$or": [
+                {"cleared_by": {"$ne": user_id}},
+                {"last_message": {"$ne": None}},
+            ],
+        }
+        return await self.conversations.count_documents(query)
 
     async def update_group_info(
         self, conversation_id: str, updates: Dict[str, Any]

@@ -120,6 +120,15 @@ class ConversationService:
             current_user_id, recipient_id
         )
         if existing:
+            if "cleared_by" in existing and current_user_id in existing.get("cleared_by", []):
+                oid = _to_object_id(existing["id"])
+                await self.repo.conversations.update_one(
+                    {"$or": [{"_id": oid}, {"_id": existing["id"]}]},
+                    {"$pull": {"cleared_by": current_user_id}},
+                )
+                existing["cleared_by"] = [
+                    u for u in existing.get("cleared_by", []) if u != current_user_id
+                ]
             return await self._hydrate_conversation(existing, current_user_id)
 
         # Create new direct conversation
@@ -371,17 +380,50 @@ class ConversationService:
             ]
         })
 
-        # 2. Permanently delete the conversation document from MongoDB
-        await self.repo.delete_conversation(conversation_id)
+        is_direct = conv.get("type") == "direct" or len(members) == 2
 
-        # 3. Dispatch real-time event to notify participants
-        await self._dispatch_realtime_event(
-            "conversation.deleted",
-            {"conversation_id": conversation_id},
-            conversation_id,
-            members,
-            current_user_id,
-        )
+        if is_direct:
+            # For 1:1 direct conversation, keep the record so future messages from either
+            # participant can be created, delivered, and displayed without 404 errors.
+            now = datetime.now(timezone.utc)
+            await self.repo.conversations.update_one(
+                {"$or": [{"_id": oid}, {"_id": conversation_id}]},
+                {
+                    "$set": {
+                        "last_message": None,
+                        "updated_at": now,
+                    },
+                    "$addToSet": {"cleared_by": current_user_id},
+                },
+            )
+            # Dispatch messages.cleared so active chat pages clear message history immediately
+            await self._dispatch_realtime_event(
+                "messages.cleared",
+                {"conversation_id": conversation_id},
+                conversation_id,
+                members,
+                current_user_id,
+            )
+            # Notify only the deleting user that the conversation was removed from their inbox
+            await self._dispatch_realtime_event(
+                "conversation.deleted",
+                {"conversation_id": conversation_id},
+                conversation_id,
+                [current_user_id],
+                current_user_id,
+            )
+        else:
+            # 2. For group conversations, permanently delete the conversation document from MongoDB
+            await self.repo.delete_conversation(conversation_id)
+
+            # 3. Dispatch real-time event to notify participants
+            await self._dispatch_realtime_event(
+                "conversation.deleted",
+                {"conversation_id": conversation_id},
+                conversation_id,
+                members,
+                current_user_id,
+            )
 
         return ActionSuccessResponse(
             status="ok",

@@ -312,6 +312,7 @@ class MessageService:
         """Permanently deletes all messages in a conversation."""
         conv = await self._verify_conversation_membership(current_user_id, conversation_id)
         count = await self.repo.delete_messages_by_conversation(conversation_id)
+        await self.repo.update_conversation_last_message(conversation_id, None)
 
         members = [str(m) for m in conv.get("members", [])] if conv else []
         await self._dispatch_realtime_event(

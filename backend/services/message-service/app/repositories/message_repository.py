@@ -169,19 +169,21 @@ class MessageRepository:
         return await self.find_by_id(message_id)
 
     async def update_conversation_last_message(
-        self, conversation_id: str, last_message_doc: Dict[str, Any]
+        self, conversation_id: str, last_message_doc: Optional[Dict[str, Any]]
     ) -> None:
         """Updates the conversation record with summary of the most recent message."""
         oid = _to_object_id(conversation_id)
         now = datetime.now(timezone.utc)
+        update_fields: Dict[str, Any] = {
+            "last_message": last_message_doc,
+            "updated_at": now,
+        }
+        if last_message_doc is not None:
+            update_fields["cleared_by"] = []
+
         await self.conversations.update_one(
             {"$or": [{"_id": oid}, {"_id": conversation_id}]},
-            {
-                "$set": {
-                    "last_message": last_message_doc,
-                    "updated_at": now,
-                }
-            },
+            {"$set": update_fields},
         )
 
     async def delete_messages_by_conversation(self, conversation_id: str) -> int:
